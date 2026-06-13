@@ -1,0 +1,20 @@
+Delayed transition: a literal-millisecond `after` timer fires on virtual-time
+advance and lands in a top-level final state.
+-- machine.json --
+{
+  "id": "t",
+  "initial": "wait",
+  "states": {
+    "wait": {
+      "after": {
+        "1000": { "target": "#go" }
+      }
+    },
+    "go": { "type": "final" }
+  }
+}
+-- scenario --
+expect active wait
+advance 1s
+expect active go
+expect status done

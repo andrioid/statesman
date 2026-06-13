@@ -1,0 +1,24 @@
+Compound nesting: sibling transition within a region, then an absolute
+transition that exits the region into a top-level final state.
+-- machine.json --
+{
+  "id": "h",
+  "initial": "a",
+  "states": {
+    "a": {
+      "initial": "a1",
+      "states": {
+        "a1": { "on": { "E": { "target": "a2" } } },
+        "a2": { "on": { "UP": { "target": "#b" } } }
+      }
+    },
+    "b": { "type": "final" }
+  }
+}
+-- scenario --
+expect active a.a1
+send E
+expect active a.a2
+send UP
+expect active b
+expect status done

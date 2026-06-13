@@ -1,0 +1,14 @@
+{
+  "id": "simple",
+  "initial": "giving",
+  "states": {
+    "giving": {
+      "on": { "SPIN": { "actions": [{ "type": "spinGiving" }] } },
+      "always": { "target": "taking", "guard": { "type": "payingTooMuch" } }
+    },
+    "taking": {
+      "on": { "SPIN": { "actions": [{ "type": "spinTaking" }] } },
+      "always": { "target": "giving", "guard": { "type": "payingTooLittle" } }
+    }
+  }
+}

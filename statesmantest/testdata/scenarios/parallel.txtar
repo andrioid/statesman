@@ -1,0 +1,32 @@
+Parallel regions: a single broadcast event fires a transition in every region
+simultaneously, advancing both leaves in one macrostep.
+-- machine.json --
+{
+  "id": "p",
+  "initial": "par",
+  "states": {
+    "par": {
+      "type": "parallel",
+      "states": {
+        "r1": {
+          "initial": "x1",
+          "states": {
+            "x1": { "on": { "E": { "target": "y1" } } },
+            "y1": {}
+          }
+        },
+        "r2": {
+          "initial": "x2",
+          "states": {
+            "x2": { "on": { "E": { "target": "y2" } } },
+            "y2": {}
+          }
+        }
+      }
+    }
+  }
+}
+-- scenario --
+expect active par.r1.x1 par.r2.x2
+send E
+expect active par.r1.y1 par.r2.y2

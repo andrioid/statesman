@@ -1,0 +1,94 @@
+{
+  "id": "order",
+  "initial": "idle",
+  "invoke": [
+    {
+      "id": "inventory",
+      "src": "watchInventory"
+    }
+  ],
+  "states": {
+    "idle": {
+      "on": {
+        "SUBMIT": {
+          "target": "processing",
+          "actions": [
+            {
+              "type": "validateForm"
+            }
+          ]
+        }
+      }
+    },
+    "processing": {
+      "initial": "charging",
+      "states": {
+        "charging": {
+          "invoke": [
+            {
+              "id": "charge",
+              "src": "chargeCard",
+              "onDone": {
+                "target": "#confirming"
+              },
+              "onError": [
+                {
+                  "guard": {
+                    "type": "hasRetriesLeft"
+                  },
+                  "target": "#retrying",
+                  "actions": [
+                    {
+                      "type": "incrementRetries"
+                    }
+                  ]
+                },
+                {
+                  "target": "#errored"
+                }
+              ]
+            }
+          ],
+          "after": {
+            "30000": [
+              {
+                "guard": {
+                  "type": "hasRetriesLeft"
+                },
+                "target": "#retrying",
+                "actions": [
+                  {
+                    "type": "incrementRetries"
+                  }
+                ]
+              },
+              {
+                "target": "#errored"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "retrying": {
+      "after": {
+        "RetryDelay": {
+          "target": "#charging"
+        }
+      }
+    },
+    "confirming": {
+      "on": {
+        "CONFIRM": {
+          "target": "#done"
+        }
+      }
+    },
+    "done": {
+      "type": "final"
+    },
+    "errored": {
+      "type": "final"
+    }
+  }
+}

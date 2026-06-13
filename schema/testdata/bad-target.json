@@ -1,0 +1,13 @@
+{
+  "id": "m",
+  "initial": "a",
+  "states": {
+    "a": {
+      "on": {
+        "GO": {
+          "target": "#nonexistent"
+        }
+      }
+    }
+  }
+}

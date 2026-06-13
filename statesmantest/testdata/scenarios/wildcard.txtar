@@ -1,0 +1,21 @@
+Wildcard descriptor: an event with no explicit handler is caught by the `*`
+transition.
+-- machine.json --
+{
+  "id": "wild",
+  "initial": "a",
+  "states": {
+    "a": {
+      "on": {
+        "SPECIFIC": { "target": "b" },
+        "*": { "target": "c" }
+      }
+    },
+    "b": {},
+    "c": {}
+  }
+}
+-- scenario --
+expect active a
+send RANDOM
+expect active c

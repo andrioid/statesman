@@ -1,0 +1,17 @@
+Eventless transition: entering `middle` immediately takes its `always` edge to
+`end` within the same macrostep, so a single event lands two states forward.
+-- machine.json --
+{
+  "id": "always",
+  "initial": "start",
+  "states": {
+    "start": { "on": { "GO": { "target": "middle" } } },
+    "middle": { "always": { "target": "end" } },
+    "end": { "type": "final" }
+  }
+}
+-- scenario --
+expect active start
+send GO
+expect active end
+expect status done
