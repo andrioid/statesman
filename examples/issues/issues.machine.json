@@ -1,5 +1,6 @@
 {
    "$schema": "https://raw.githubusercontent.com/statelyai/schema/refs/heads/main/machineSchema.json",
+   "description": "Automated GitHub issue triaging, investigation and fixing with help of invoked LLM agents from shell.",
    "id": "issues",
    "initial": "collecting",
    "states": {
@@ -18,7 +19,11 @@
          "always": { "target": "syncing" }
       },
       "syncing": {
-         "description": "Syncing state with GitHub"
+         "description": "Syncing state with GitHub",
+         "always": { "target": "finished", "guard": { "type": "isFinished" } }
+      },
+      "finished": {
+         "description": "Final state"
       }
    }
 }
