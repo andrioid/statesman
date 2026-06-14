@@ -22,19 +22,21 @@ as an actor with a lock-free snapshot and deterministic, virtual-time tests.
 ## Install
 
 ```sh
-go get github.com/andrioid/statesman
-go install github.com/andrioid/statesman/cmd/statesman@latest
+go get github.com/andrioid/statesman                       # runtime library
+go get -tool github.com/andrioid/statesman/cmd/statesman   # CLI, tracked as a go tool
 ```
 
-Requires Go 1.26+.
+The CLI is a [Go tool dependency](https://go.dev/doc/modules/managing-dependencies#tools):
+`go get -tool` pins it in your `go.mod` and you run it with `go tool statesman <verb>` —
+no separate `go install` or `$PATH` binary to keep in sync. Requires Go 1.26+.
 
 ## Quickstart
 
 ```sh
-statesman init checkout      # scaffold a runnable checkout/ package (idle -> done)
+go tool statesman init checkout   # scaffold a runnable checkout/ package (idle -> done)
 ```
 
-`init` writes `checkout/`: `gen.go` (with a `//go:generate statesman generate`
+`init` writes `checkout/`: `gen.go` (with a `//go:generate go tool statesman generate`
 directive), `checkout.machine.json`, `checkout.events.go` (event/context stubs),
 and `checkout.machine.gen.go` (generated facade) — and it compiles immediately. Then iterate:
 
@@ -42,8 +44,8 @@ and `checkout.machine.gen.go` (generated facade) — and it compiles immediately
 2. Re-scaffold the new symbols and regenerate:
 
    ```sh
-   statesman stub ./checkout       # append stubs for new events/actors/fields + an Impl skeleton (idempotent)
-   go generate ./checkout/         # re-runs `statesman generate` -> checkout.machine.gen.go
+   go tool statesman stub ./checkout   # append stubs for new events/actors/fields + an Impl skeleton (idempotent)
+   go generate ./checkout/             # re-runs `go tool statesman generate` -> checkout.machine.gen.go
    ```
 
 3. Fill in the `Implementations` methods on the `Impl` skeleton `statesman stub`
@@ -69,9 +71,9 @@ snap := s.Snapshot()                       // typed: snap.ActiveStates, snap.Con
 Visualize it — Mermaid for docs, or a live tree in the terminal:
 
 ```sh
-statesman diagram ./checkout                 # Mermaid stateDiagram-v2 (e.g. pipe to checkout.mmd)
-statesman diagram ./checkout --format term   # Unicode outline tree in the terminal
-statesman diagram ./checkout --watch         # re-render as you edit the machine.json
+go tool statesman diagram ./checkout                 # Mermaid stateDiagram-v2 (e.g. pipe to checkout.mmd)
+go tool statesman diagram ./checkout --format term   # Unicode outline tree in the terminal
+go tool statesman diagram ./checkout --watch         # re-render as you edit the machine.json
 ```
 
 `diagram.Live(ctx, machine, os.Stdout)` overlays a running machine's active

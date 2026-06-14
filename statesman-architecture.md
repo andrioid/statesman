@@ -2,7 +2,7 @@
 
 A Go statechart runtime, inspired by xstate and anchored on Stately's [`machineSchema.json`](https://github.com/statelyai/schema/blob/main/machineSchema.json), optimized for **long-running backend workflows**, built on Go generics.
 
-> **Status:** design draft. No code yet. Implementation sequencing lives in [`TODO.md`](./TODO.md); this document stays focused on design and patterns.
+> **Status:** v1, implemented. Implementation sequencing and roadmap live in [`TODO.md`](./TODO.md); this document stays focused on design and patterns.
 
 ---
 
@@ -236,7 +236,7 @@ Authoring the Go side (Stage 2) is **not** a guess-then-get-yelled-at loop. `sta
 
 - **`statesman stub`** — appends a compilable stub for every member of the unresolved set to its conventional file (`<id>.events.go` / `<id>.actors.go` / `<id>.delays.go`, and `<id>.behavior.go` for the `Impl` skeleton), creating the file if absent; non-destructive, re-run anytime.
 - **`statesman generate`** — emits/re-emits `<id>.machine.gen.go` for every machine in scope; errors on the unresolved set (`CodegenError`, see [Error model](#error-model)) and warns on any surviving `statesman.Unspecified`.
-- **`statesman init <name>`** — bootstraps a fresh machine package: a runnable `idle → done` starter `<id>.machine.json` + a `//go:generate statesman generate` directive, then runs `stub` and `generate` so `go test ./...` is green on first run.
+- **`statesman init <name>`** — bootstraps a fresh machine package: a runnable `idle → done` starter `<id>.machine.json` + a `//go:generate go tool statesman generate` directive, then runs `stub` and `generate` so `go test ./...` is green on first run.
 
 ```mermaid
 flowchart LR
@@ -1187,7 +1187,7 @@ func TestRetryThenConfirm(t *testing.T) {
 | 46 | Observer registration | `Machine.AddObserver(any)` type-asserts to observer interfaces; the one intentional `any`, at the registration boundary |
 | 47 | Scaffolding | `statesman stub` emits compilable stubs for the unresolved set (events, adapters, param/context fields, delays) + an `Impl` behavior skeleton; same `go/types` resolution pass as `statesman generate`; non-destructive and idempotent |
 | 48 | Stub semantics | Adapter kind defaults to promise (not in schema); unknown field/param types → `statesman.Unspecified` (`= any`) + `TODO`, surfaced as a `statesman generate` warning (hard error under `generate --strict`, for CI); bodies `panic("TODO")` |
-| 49 | CLI surface | One `statesman` binary, four verbs: `init <name>` bootstraps a runnable (`idle → done`) machine package then stubs + generates it; `stub` emits user-owned stubs (idempotent); `generate` (re)generates `<id>.machine.gen.go` for every machine in scope, driven by `//go:generate statesman generate`; `diagram [path]` renders the machine as Mermaid or a terminal tree |
+| 49 | CLI surface | One `statesman` binary (consumed as a `go tool` dependency), four verbs: `init <name>` bootstraps a runnable (`idle → done`) machine package then stubs + generates it; `stub` emits user-owned stubs (idempotent); `generate` (re)generates `<id>.machine.gen.go` for every machine in scope, driven by `//go:generate go tool statesman generate`; `diagram [path]` renders the machine as Mermaid or a terminal tree |
 | 50 | Machine unit | One machine per Go package (package-scoped singletons would otherwise collide); identity is the **filename** — each package holds one `<id>.machine.json` whose `id` the filename prefix must match, generated to `<id>.machine.gen.go`. `id == directory name` is `init`'s default, not enforced, so a machine may live in any directory. `fromMachine` composition is plain imports, so `statesman generate ./...` loads each package in isolation and topo-orders (leaves first), acyclic by Go's import rules |
 | 51 | Stub file placement | `statesman stub` appends each symbol to its machine-named file (`<id>.events.go` / `<id>.actors.go` / `<id>.delays.go` / `<id>.behavior.go`), create-or-append, strictly additive, gofmt'd — dot-separated to dodge Go's `_test.go`/`_GOOS` build-constraint suffixes. The `<id>.behavior.go` `Impl` skeleton emits one panicking method per action/guard/invoke-input callsite, skipping methods a present `Impl` already defines |
 | 52 | Timer cancellation | `after` timers scoped to the state's `context` (cancel on state exit via the ctx tree); timing from the pluggable `Clock`, durability from `PendingAfter`; `context.WithTimeout` is never the timer of record |

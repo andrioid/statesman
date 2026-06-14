@@ -214,7 +214,7 @@ func initMachine(name string) error {
 	}
 	gengo := filepath.Join(name, "gen.go")
 	if _, err := os.Stat(gengo); os.IsNotExist(err) {
-		doc := fmt.Sprintf("package %s\n\n//go:generate statesman generate\n", id)
+		doc := fmt.Sprintf("package %s\n\n//go:generate go tool statesman generate\n", id)
 		if err := os.WriteFile(gengo, []byte(doc), 0o644); err != nil {
 			return err
 		}

@@ -1,3 +1,3 @@
 package issues
 
-//go:generate statesman generate
+//go:generate go tool statesman generate
