@@ -234,17 +234,17 @@ const RetryDelay = 5 * time.Second
 
 Authoring the Go side (Stage 2) is **not** a guess-then-get-yelled-at loop. `statesman stub` is the cold-start half of the validator: it and `statesman generate` run the *same* `go/types` name-resolution pass against `machine.json` + your existing `.go`, and differ only in what they do with the **unresolved set** — names the schema references that have no Go symbol yet.
 
-- **`statesman stub`** — appends a compilable stub for every member of the unresolved set to its conventional file (`types.go` / `actors.go` / `delays.go`, and `impl.go` for the `Impl` skeleton once `machine_gen.go` exists), creating the file if absent; non-destructive, re-run anytime.
-- **`statesman generate`** — emits/re-emits `machine_gen.go` for every machine in scope; errors on the unresolved set (`CodegenError`, see [Error model](#error-model)) and warns on any surviving `statesman.Unspecified`.
-- **`statesman init <name>`** — bootstraps a fresh machine package: a runnable `idle → done` starter `machine.json` + a `//go:generate statesman generate` directive, then runs `stub` and `generate` so `go test ./...` is green on first run.
+- **`statesman stub`** — appends a compilable stub for every member of the unresolved set to its conventional file (`<id>.events.go` / `<id>.actors.go` / `<id>.delays.go`, and `<id>.behavior.go` for the `Impl` skeleton), creating the file if absent; non-destructive, re-run anytime.
+- **`statesman generate`** — emits/re-emits `<id>.machine.gen.go` for every machine in scope; errors on the unresolved set (`CodegenError`, see [Error model](#error-model)) and warns on any surviving `statesman.Unspecified`.
+- **`statesman init <name>`** — bootstraps a fresh machine package: a runnable `idle → done` starter `<id>.machine.json` + a `//go:generate statesman generate` directive, then runs `stub` and `generate` so `go test ./...` is green on first run.
 
 ```mermaid
 flowchart LR
-    M["machine.json"] --> R{"go/types resolution<br/>(unresolved set)"}
+    M["<id>.machine.json"] --> R{"go/types resolution<br/>(unresolved set)"}
     R -->|"generate"| G{"empty?"}
     G -->|"no"| E["CodegenError per name"]
-    G -->|"yes"| O["machine_gen.go"]
-    R -->|"stub"| S["stubs appended to<br/>types.go / actors.go / delays.go / impl.go"]
+    G -->|"yes"| O["<id>.machine.gen.go"]
+    R -->|"stub"| S["stubs appended to<br/>&lt;id&gt;.events.go / .actors.go / .delays.go / .behavior.go"]
     S -.->|"edit + re-run"| M
 ```
 
@@ -255,7 +255,7 @@ flowchart LR
 // absent, appending if present — never a rewrite of what you wrote. gofmt and
 // import management run afterward.
 
-// types.go — events, the sealed union, param structs, context fields
+// order.events.go — events, the sealed union, param structs, context fields
 type Event interface {
     statesman.EventBase
     orderEvent()
@@ -268,14 +268,20 @@ func (Cancel)        orderEvent() {}
 func (PaymentFailed) orderEvent() {}
 type LogErrorParams struct{ Level statesman.Unspecified /* TODO: type */ } // param names known, types not
 
-// actors.go — adapter kind is NOT in the schema; stub emits the promise shape.
+// order.actors.go — adapter kind is NOT in the schema; stub emits the promise shape.
 // Switch to callback/observable/machine by editing the signature.
 func ChargeCard(ctx context.Context, in statesman.Unspecified) (statesman.Unspecified, error) {
     panic("TODO: implement ChargeCard")
 }
 
-// delays.go
+// order.delays.go
 const RetryDelay = 0 // TODO: set duration
+
+// order.behavior.go — Impl skeleton: one panicking method per action/guard/input
+type Impl struct{}
+func (Impl) ValidateFormOnSubmit(ctx Context, evt Submit) ActionResult {
+    panic("TODO: implement ValidateFormOnSubmit")
+}
 ```
 
 Three honest limits, each marked in the emitted code:
@@ -284,9 +290,9 @@ Three honest limits, each marked in the emitted code:
 2. **Field and param types are unknowable.** The schema gives *names* (`level`), not Go types. `statesman stub` infers from JSON literal values where the schema has an initial `context`/`params` value (string → `string`, number → `int64`, bool → `bool`); everywhere else it emits `statesman.Unspecified` (a `= any` alias) + a `TODO`. `Unspecified` is greppable, and `statesman generate` emits a **warning** listing any that survive into a build — so `any` never silently reaches a delivered surface.
 3. **Bodies are `panic("TODO")`.** Stubs compile (so codegen can read their signatures) but fail loudly if reached before you implement them — consistent with the [panic policy](#subtle-issues-documented): an unfilled stub *is* a programming error.
 
-**The `Implementations` skeleton.** Once `machine_gen.go` exists (so the interface is defined), `statesman stub` additionally emits a `<Machine>Impl` skeleton — a struct satisfying `Implementations` with every method stubbed to `panic("TODO")` and signatures already carrying the concrete event and param types ([per-callsite narrowing](#generated-code-the-users-surface)). This turns the compiler's "N missing methods" into N ready-to-fill bodies. It is emitted only if no type in the package already satisfies the interface; once a real impl exists, the compiler takes over enumerating gaps and `statesman stub` leaves it alone.
+**The behavior skeleton.** `statesman stub` emits an `Impl` skeleton to `<id>.behavior.go` — a struct with one method per action/guard/invoke-input callsite stubbed to `panic("TODO")`, signatures already carrying the concrete event and param types ([per-callsite narrowing](#generated-code-the-users-surface)) from the very computation that builds the `Implementations` interface. This turns the compiler's "N missing methods" into N ready-to-fill bodies. It is strictly additive — it emits only methods a present `Impl` lacks, so it converges across re-runs and never fights a real implementation.
 
-**Non-destructive and idempotent.** `statesman stub` never overwrites a hand-written symbol — it appends only the still-unresolved set to the conventional files, then runs gofmt/goimports — so it doubles as a day-2 tool: add an event in Studio, re-run `statesman stub`, get just the new stub in `types.go`. This preserves [decision 9](#decisions-snapshot): the JSON + convention remain the only source of truth; it writes user-owned Go and changes nothing about how names resolve.
+**Non-destructive and idempotent.** `statesman stub` never overwrites a hand-written symbol — it appends only the still-unresolved set to the conventional files, then runs gofmt/goimports — so it doubles as a day-2 tool: add an event in Studio, re-run `statesman stub`, get just the new stub in `<id>.events.go`. This preserves [decision 9](#decisions-snapshot): the JSON + convention remain the only source of truth; it writes user-owned Go and changes nothing about how names resolve.
 
 ### Naming normalization
 
@@ -314,9 +320,9 @@ There is no override file. A name that can't be resolved by convention is a buil
 
 ```mermaid
 flowchart LR
-    M[machine.json] --> CG["statesman generate"]
+    M[&lt;id&gt;.machine.json] --> CG["statesman generate"]
     UT[user .go files] --> CG
-    CG --> O[machine_gen.go]
+    CG --> O[&lt;id&gt;.machine.gen.go]
     O -.->|generates| ES[Sealed Event union helpers]
     O -.->|generates| ST[Typed state ID constants]
     O -.->|generates| AP[Per-target ActionResult variants]
@@ -328,12 +334,12 @@ flowchart LR
 
 ### Multiple machines
 
-The unit is the **Go package**: one `machine.json`, one machine, per package. The package-scoped generated singletons — `Event`, `Context`, `States`, `ActionResult`, `Implementations` — would name-collide if two machines shared a package, so the convention forces the split. Multiple machines means multiple packages. The per-machine constructor names (`NewOrderMachine`, `RestoreOrder`, `OrderImpl`) take their `<Machine>` prefix from the machine's `id`, which must equal the package name (codegen enforces it); the singletons stay unprefixed because the package already scopes them.
+The unit is the **Go package**: one machine per package. The package-scoped generated singletons — `Event`, `Context`, `States`, `ActionResult`, `Implementations` — would name-collide if two machines shared a package, so the convention forces the split; multiple machines means multiple packages. Identity lives in the **filename**, not the directory: each package holds a single `<id>.machine.json` whose `id` the filename prefix must equal, and the generated facade is `<id>.machine.gen.go`. The per-machine constructor `New<Machine>Machine` takes its prefix from the `id`; the singletons stay unprefixed because the package already scopes them. The package may sit in any directory the app developer chooses — `id == directory name` is the convenient default `statesman init` scaffolds, not a requirement.
 
 Composition is plain Go imports. A parent that `invoke`s a child via `fromMachine` references the child's `MachineDef` constructor:
 
 ```go
-// order/actors.go — order invokes the payment machine
+// order/order.actors.go — order invokes the payment machine
 func PaymentMachineDef() statesman.MachineDef[payment.Context, payment.Event] { /*...*/ }
 ```
 
@@ -351,7 +357,7 @@ Sibling root machines are simply separate packages the host registers side by si
 For a machine that invokes `watchInventory` at the root (a `fromCallback` streaming stock changes, sendable via its `receive`-subset parameter) and, in `processing`, `invoke`s the `chargeCard` promise — where `idle.on.SUBMIT → processing` fires `validateForm` (which forwards the order's SKUs to the inventory watcher) and payment failure runs `incrementRetries`:
 
 ```go
-// machine_gen.go (generated; do not edit)
+// order.machine.gen.go (generated; do not edit)
 package order
 
 // --- Typed state IDs ------------------------------------------------
@@ -1178,11 +1184,11 @@ func TestRetryThenConfirm(t *testing.T) {
 | 44 | Composite effects | Transitions list multiple actions; runtime collects results, accumulates assigns, queues side effects |
 | 45 | Actor ref shapes | `ActorRef[TCtx, TEvt]` per adapter: machine `[Ctx, Evt]`, promise/observable `[Out, Never]` (non-sendable), callback `[struct{}, Cmd]` (sendable). `Never` is uninhabited |
 | 46 | Observer registration | `Machine.AddObserver(any)` type-asserts to observer interfaces; the one intentional `any`, at the registration boundary |
-| 47 | Scaffolding | `statesman stub` emits compilable stubs for the unresolved set (events, adapters, param/context fields, delays) + an `Impl` skeleton once `machine_gen.go` exists; same `go/types` resolution pass as `statesman generate`; non-destructive and idempotent |
+| 47 | Scaffolding | `statesman stub` emits compilable stubs for the unresolved set (events, adapters, param/context fields, delays) + an `Impl` behavior skeleton; same `go/types` resolution pass as `statesman generate`; non-destructive and idempotent |
 | 48 | Stub semantics | Adapter kind defaults to promise (not in schema); unknown field/param types → `statesman.Unspecified` (`= any`) + `TODO`, surfaced as a `statesman generate` warning (hard error under `generate --strict`, for CI); bodies `panic("TODO")` |
-| 49 | CLI surface | One `statesman` binary, three verbs: `init <name>` bootstraps a runnable (`idle → done`) machine package then stubs + generates it; `stub` emits user-owned stubs (idempotent); `generate` (re)generates `machine_gen.go` for every machine in scope, driven by `//go:generate statesman generate` |
-| 50 | Machine unit | One machine per Go package (package-scoped singletons would otherwise collide); machine `id` must equal the package name; `fromMachine` composition is plain imports, so `statesman generate ./...` loads each package in isolation and topo-orders (leaves first), acyclic by Go's import rules. Per-package `generate` errors if a dependency isn't generated yet — only `./...` orders the tree |
-| 51 | Stub file placement | `statesman stub` appends each symbol to its conventional file (`types.go` / `actors.go` / `delays.go` / `impl.go`), create-or-append, strictly additive, gofmt'd — no separate `scaffold.go` to rename |
+| 49 | CLI surface | One `statesman` binary, three verbs: `init <name>` bootstraps a runnable (`idle → done`) machine package then stubs + generates it; `stub` emits user-owned stubs (idempotent); `generate` (re)generates `<id>.machine.gen.go` for every machine in scope, driven by `//go:generate statesman generate` |
+| 50 | Machine unit | One machine per Go package (package-scoped singletons would otherwise collide); identity is the **filename** — each package holds one `<id>.machine.json` whose `id` the filename prefix must match, generated to `<id>.machine.gen.go`. `id == directory name` is `init`'s default, not enforced, so a machine may live in any directory. `fromMachine` composition is plain imports, so `statesman generate ./...` loads each package in isolation and topo-orders (leaves first), acyclic by Go's import rules |
+| 51 | Stub file placement | `statesman stub` appends each symbol to its machine-named file (`<id>.events.go` / `<id>.actors.go` / `<id>.delays.go` / `<id>.behavior.go`), create-or-append, strictly additive, gofmt'd — dot-separated to dodge Go's `_test.go`/`_GOOS` build-constraint suffixes. The `<id>.behavior.go` `Impl` skeleton emits one panicking method per action/guard/invoke-input callsite, skipping methods a present `Impl` already defines |
 | 52 | Timer cancellation | `after` timers scoped to the state's `context` (cancel on state exit via the ctx tree); timing from the pluggable `Clock`, durability from `PendingAfter`; `context.WithTimeout` is never the timer of record |
 | 53 | Testing strategy | Scenario/trace tests are the primary surface (deterministic via `Sync` + `ManualClock`); invoked actors scripted with `FakeActor` doubles reusing the replay machinery; data fixtures double as the xstate/Stately parity corpus; unit tests reserved for non-trivial action/adapter logic |
 | 54 | Timeouts | A timeout is a plain `after` transition on the invoking state — standard Stately semantics, **visible in the chart**; firing exits the state (aborting the activity via ctx cancel) and takes the drawn edge. Reuses `after` timing/durability (decision 52); route it to the retry path or a distinct `timedOut`. The policy is in the schema, not in Go |

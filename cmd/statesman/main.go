@@ -2,7 +2,7 @@
 //
 //	statesman init <name>    bootstrap a runnable machine package
 //	statesman stub [dir]      emit user-owned stubs for the unresolved set
-//	statesman generate [dir]  (re)generate machine_gen.go
+//	statesman generate [dir]  (re)generate <id>.machine.gen.go
 package main
 
 import (
@@ -55,11 +55,28 @@ func dirArg(args []string) string {
 }
 
 func loadDef(dir string) (*statesman.Definition, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "machine.json"))
+	matches, err := filepath.Glob(filepath.Join(dir, "*.machine.json"))
 	if err != nil {
 		return nil, err
 	}
-	return schema.Load(data)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no *.machine.json found in %s", dir)
+	}
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("%s: multiple *.machine.json (one machine per package)", dir)
+	}
+	data, err := os.ReadFile(matches[0])
+	if err != nil {
+		return nil, err
+	}
+	def, err := schema.Load(data)
+	if err != nil {
+		return nil, err
+	}
+	if want := def.ID + ".machine.json"; filepath.Base(matches[0]) != want {
+		return nil, fmt.Errorf("%s: filename must match machine id; rename to %q", matches[0], want)
+	}
+	return def, nil
 }
 
 func generate(dir string) error {
@@ -72,7 +89,7 @@ func generate(dir string) error {
 		return err
 	}
 	if len(res.Unresolved) > 0 {
-		mj := filepath.Join(dir, "machine.json")
+		mj := filepath.Join(dir, def.ID+".machine.json")
 		for _, u := range res.Unresolved {
 			fmt.Fprintf(os.Stderr, "%s: unresolved %s %q (run `statesman stub`)\n", mj, u.Kind, u.GoName)
 		}
@@ -82,7 +99,7 @@ func generate(dir string) error {
 	if err != nil {
 		return err
 	}
-	out := filepath.Join(dir, "machine_gen.go")
+	out := filepath.Join(dir, def.ID+".machine.gen.go")
 	if err := os.WriteFile(out, src, 0o644); err != nil {
 		return err
 	}
@@ -166,7 +183,8 @@ func initMachine(name string) error {
 	if err := os.MkdirAll(name, 0o755); err != nil {
 		return err
 	}
-	mj := filepath.Join(name, "machine.json")
+	id := filepath.Base(name)
+	mj := filepath.Join(name, id+".machine.json")
 	if _, err := os.Stat(mj); os.IsNotExist(err) {
 		starter := fmt.Sprintf(`{
   "id": %q,
@@ -176,14 +194,14 @@ func initMachine(name string) error {
     "done": {"type": "final"}
   }
 }
-`, name)
+`, id)
 		if err := os.WriteFile(mj, []byte(starter), 0o644); err != nil {
 			return err
 		}
 	}
 	gengo := filepath.Join(name, "gen.go")
 	if _, err := os.Stat(gengo); os.IsNotExist(err) {
-		doc := fmt.Sprintf("package %s\n\n//go:generate statesman generate\n", name)
+		doc := fmt.Sprintf("package %s\n\n//go:generate statesman generate\n", id)
 		if err := os.WriteFile(gengo, []byte(doc), 0o644); err != nil {
 			return err
 		}

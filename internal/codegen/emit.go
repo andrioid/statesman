@@ -10,7 +10,7 @@ import (
 	"github.com/andrioid/statesman"
 )
 
-// Emit produces the machine_gen.go source for a resolved machine. v1 conventions
+// Emit produces the generated facade (<id>.machine.gen.go) for a resolved machine. v1 conventions
 // (documented deviations from the architecture where the schema under-specifies):
 // flat States; Context embeds only ContextFields (typed child refs deferred);
 // per-callsite method names <Action>On<Event|State>; invoke input via an Impl
@@ -121,7 +121,7 @@ func methodName(c callsite) string {
 func flatID(id statesman.StateID) string { return NormalizeName(string(id)) }
 
 func (g *gen) emitDefinition(b *strings.Builder) {
-	fmt.Fprintf(b, "//go:embed machine.json\nvar statesmanMachineJSON []byte\n\n")
+	fmt.Fprintf(b, "//go:embed %s.machine.json\nvar statesmanMachineJSON []byte\n\n", g.def.ID)
 	fmt.Fprintf(b, "var %sDefinition = func() *statesman.Definition {\n", lower(g.machineName()))
 	fmt.Fprintf(b, "\td, err := schema.Load(statesmanMachineJSON)\n\tif err != nil {\n\t\tpanic(\"statesman: %s: \" + err.Error())\n\t}\n\treturn d\n}()\n\n", g.def.ID)
 }
@@ -326,43 +326,49 @@ func (g *gen) emitContext(b *strings.Builder) {
 	b.WriteString("type Context struct{ ContextFields }\n\n")
 }
 
-func (g *gen) emitImplementations(b *strings.Builder) {
-	type method struct {
-		name string
-		sig  string
-	}
-	methods := map[string]string{}
-	order := []string{}
-	addMethod := func(name, sig string) {
-		if _, ok := methods[name]; ok {
+type implMethod struct {
+	name string
+	sig  string
+}
+
+// implMethods returns the ordered, de-duplicated method set the user must
+// implement: one per action, guard, and invoke-input callsite. Shared by the
+// generated Implementations interface and `statesman stub`'s Impl skeleton.
+func (g *gen) implMethods() []implMethod {
+	seen := map[string]bool{}
+	var out []implMethod
+	add := func(name, sig string) {
+		if seen[name] {
 			return
 		}
-		methods[name] = sig
-		order = append(order, name)
+		seen[name] = true
+		out = append(out, implMethod{name: name, sig: sig})
 	}
 	for _, c := range g.actions {
 		name := methodName(c)
 		if c.evented {
 			ev, _ := EventGoName(c.event)
-			addMethod(name, fmt.Sprintf("%s(ctx Context, evt %s) ActionResult", name, ev))
-		} else {
-			addMethod(name, fmt.Sprintf("%s(ctx Context) ActionResult", name))
+			add(name, fmt.Sprintf("%s(ctx Context, evt %s) ActionResult", name, ev))
+			continue
 		}
+		add(name, fmt.Sprintf("%s(ctx Context) ActionResult", name))
 	}
 	for _, c := range g.guards {
 		name := methodName(c)
 		if c.evented {
 			ev, _ := EventGoName(c.event)
-			addMethod(name, fmt.Sprintf("%s(ctx Context, evt %s) bool", name, ev))
-		} else {
-			addMethod(name, fmt.Sprintf("%s(ctx Context) bool", name))
+			add(name, fmt.Sprintf("%s(ctx Context, evt %s) bool", name, ev))
+			continue
 		}
+		add(name, fmt.Sprintf("%s(ctx Context) bool", name))
 	}
-	// Invoke input mappers (decision: typed input via Impl).
 	for _, im := range g.inputMappers() {
-		addMethod(im.method, fmt.Sprintf("%s(ctx Context) %s", im.method, im.inType))
+		add(im.method, fmt.Sprintf("%s(ctx Context) %s", im.method, im.inType))
 	}
+	return out
+}
 
+func (g *gen) emitImplementations(b *strings.Builder) {
 	b.WriteString(`// Implementations is the user-implemented behavior interface: one method per
 // action, guard, and invoke-input callsite. Methods run synchronously on the
 // actor goroutine, so two runtime contracts apply (statesman decisions 39, 41):
@@ -374,11 +380,10 @@ func (g *gen) emitImplementations(b *strings.Builder) {
 //     the actor goroutine and can stall its parent. Panics are programming errors.
 `)
 	b.WriteString("type Implementations interface {\n")
-	for _, name := range order {
-		fmt.Fprintf(b, "\t%s\n", methods[name])
+	for _, m := range g.implMethods() {
+		fmt.Fprintf(b, "\t%s\n", m.sig)
 	}
 	b.WriteString("}\n\n")
-	_ = method{}
 }
 
 type inputMapper struct {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestResolveOrder(t *testing.T) {
-	data, err := os.ReadFile("testdata/orderpkg/machine.json")
+	data, err := os.ReadFile("testdata/orderpkg/order.machine.json")
 	if err != nil {
 		t.Fatalf("read machine.json: %v", err)
 	}

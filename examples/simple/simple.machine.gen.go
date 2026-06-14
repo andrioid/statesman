@@ -9,7 +9,7 @@ import (
 	"github.com/andrioid/statesman/schema"
 )
 
-//go:embed machine.json
+//go:embed simple.machine.json
 var statesmanMachineJSON []byte
 
 var simpleDefinition = func() *statesman.Definition {

@@ -10,12 +10,12 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// TestGenerateOrderCompiles generates machine_gen.go for the order fixture and
+// TestGenerateOrderCompiles generates order.machine.gen.go for the order fixture and
 // type-checks that the fixture + generated code form a valid package wired to the
 // runtime core.
 func TestGenerateOrderCompiles(t *testing.T) {
 	dir := "testdata/orderpkg"
-	data, err := os.ReadFile(filepath.Join(dir, "machine.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "order.machine.json"))
 	if err != nil {
 		t.Fatalf("read machine.json: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestGenerateOrderCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("emit: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "machine_gen.go"), src, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "order.machine.gen.go"), src, 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 

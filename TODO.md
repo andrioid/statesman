@@ -13,8 +13,10 @@ numbers (`D#`) and section links below point back into the architecture doc.
 > ship. **Phase 6 (durable persistence) is deferred to the post-v1 roadmap** — its
 > contract (`docs/persistence-contract.md`) and the `TransitionObserver` seam
 > exist, but the on-disk store/recovery is not implemented; v1 is in-memory.
-> **Phase 6 below is a forward, reviewable plan (not yet built).** The other
-> per-task checkboxes record the original plan; this status is authoritative.
+> **Phase 6 below is a forward, reviewable plan (not yet built).** Per-task
+> checkboxes are reconciled to the shipped tree (2026-06-13 review): the only
+> open v1 item is the CI workflow (Phase 0); parity ships as a curated txtar
+> corpus, not an xstate harness (DECISIONS).
 
 ## Legend & conventions
 
@@ -37,6 +39,7 @@ github.com/andrioid/statesman             # module path (Go 1.26)
   ./cmd/statesman    package main          # the `statesman` CLI (init/stub/generate)
   ./internal/codegen package codegen        # go/types resolution + emitters (+ testdata/orderpkg worked example)
   ./statesmantest    package statesmantest # Sync runner, ManualClock, FakeActor, txtar scenario corpus
+  ./examples         # runnable quickstart(s) (simple: giving↔taking always-loop)
   ./docs                                   # normative specs (transition, schema-subset, persistence)
   ./durable          package durable       # persistence reference impls — ROADMAP (Phase 6, post-v1)
 ```
@@ -78,7 +81,7 @@ stand up an empty, building module. No runtime behavior yet.
 - [x] **`docs/persistence-contract.md`** — durability window (observer-before-
       publish, abort-on-write-failure), `OutboxIntent` wire format, EventLog
       records, and the at-least-once startup recovery reconciliation (D8, D27, D42).
-- [x] Vendored `internal/schema/testdata/machineSchema.json` + `order.json`
+- [x] Vendored `schema/testdata/machineSchema.json` + `order.json`
       fixture (validates against the schema, gate 1). Rejection/feature fixtures
       deferred to Phase 1 loader tests.
 
@@ -95,17 +98,17 @@ retry loop is traceable on paper against `transition-algorithm.md`.
 **Goal:** the generic vocabulary and an in-memory machine definition the engine
 will walk. No actor loop yet.
 
-- [ ] Core generic surface
+- [x] Core generic surface
       ([Generics in the core runtime](./statesman-architecture.md#generics-in-the-core-runtime)):
       `EventBase`, `Never` (uninhabited; D45), `StateID`, `ActorAddress`,
       `ActorStatus`, `Snapshot[TCtx]`, `ChildRef`, `ScheduledTimer`.
-- [ ] Error model (D-[Error model](./statesman-architecture.md#error-model)):
+- [x] Error model (D-[Error model](./statesman-architecture.md#error-model)):
       `ErrActorStopped`, `ErrAlreadyStarted`, `ErrAlwaysLoopExceeded`,
       `ErrMailboxFull`, `ObserverError`, `CodegenError`.
-- [ ] `internal/schema`: loader for the Phase-0 subset → an internal
+- [x] `schema`: loader for the Phase-0 subset → an internal
       `*Definition` tree (states, transitions, invokes, after/always, guard &
       action refs). Reject out-of-subset input with a clear error.
-- [ ] Definition validation: missing `invoke.id` → error (addressing rule);
+- [x] Definition validation: missing `invoke.id` → error (addressing rule);
       malformed targets, unreachable states, parallel/history well-formedness.
 
 **Acceptance:** loader round-trips every fixture from Phase 0 into a
@@ -122,16 +125,16 @@ race-clean.
 `docs/transition-algorithm.md`. No goroutines, no time, no I/O — a function from
 (state, context, event) to (next state, accumulated actions, outbox intents).
 
-- [ ] State configuration model (active-state set) for compound + parallel +
+- [x] State configuration model (active-state set) for compound + parallel +
       history; entry/exit set computation (LCCA).
-- [ ] Guard evaluation in document order; transition selection per the spec.
-- [ ] Action accumulation: run actions in order, fold `Assign` into a new
+- [x] Guard evaluation in document order; transition selection per the spec.
+- [x] Action accumulation: run actions in order, fold `Assign` into a new
       context, collect side-effect intents to an outbox (D44, composite effects).
-- [ ] `always` processing with the configurable loop guard (D38) →
+- [x] `always` processing with the configurable loop guard (D38) →
       `ErrAlwaysLoopExceeded`.
-- [ ] Pre-transition snapshot / rollback point (step 4) and the full-rollback
+- [x] Pre-transition snapshot / rollback point (step 4) and the full-rollback
       path as a pure result variant (consumed by the actor loop in Phase 3).
-- [ ] **Opaque applier boundary** (D36): engine takes
+- [x] **Opaque applier boundary** (D36): engine takes
       `func(actionIndex int, ctx TCtx, evt TEvt) appliedEffect` and never names
       `ActionResult`. Define `appliedEffect` and the callsite→method dispatch
       contract the generated constructor will satisfy.
@@ -150,21 +153,21 @@ guards, `always`, loop-guard trip); 100% of subset branches covered; race-clean
 **Goal:** wrap the Phase-2 engine in the one-goroutine-per-actor runtime with
 lock-free reads. Still no adapters; a "machine with no children" runs end-to-end.
 
-- [ ] `Machine[TCtx,TEvt]` + unexported `runningActor`: actor loop draining
+- [x] `Machine[TCtx,TEvt]` + unexported `runningActor`: actor loop draining
       internal queue then mailbox (D24); `Send` with ctx + `ErrActorStopped`
       after close; `TrySend` → `ErrMailboxFull`.
-- [ ] Lock-free `Snapshot()` via `atomic.Pointer[Snapshot]` (D28); publication
+- [x] Lock-free `Snapshot()` via `atomic.Pointer[Snapshot]` (D28); publication
       ordering per [Observer ordering](./statesman-architecture.md#observer-ordering-decision-27).
-- [ ] Subscribers: COW `atomic.Pointer[[]subscriber]`, strong delivery / bounded
+- [x] Subscribers: COW `atomic.Pointer[[]subscriber]`, strong delivery / bounded
       queue / block-on-overflow (D25); `WithBuffer`, `WithLatestWins`.
-- [ ] Observer interfaces + `AddObserver(any)` type-assert at registration (D46);
+- [x] Observer interfaces + `AddObserver(any)` type-assert at registration (D46);
       sync-observer abort → full rollback → terminal `Error` (D26).
-- [ ] Lifecycle: single-shot `Start` via `sync.Once` (D29, D33); idempotent
+- [x] Lifecycle: single-shot `Start` via `sync.Once` (D29, D33); idempotent
       `Close` + `done` chan; `CloseAfterDrain(ctx)` (D40).
-- [ ] `Clock` / `TimerService` / `Timer` ports; `WallClock` +
+- [x] `Clock` / `TimerService` / `Timer` ports; `WallClock` +
       `InProcessTimerService`; state-scoped `after` via ctx tree (D52);
       `Timer.Cancel() bool` race surfacing (D30).
-- [ ] `statesmantest`: `Sync` runner (`SendAndSettle`/`Settle`/`Advance`),
+- [x] `statesmantest`: `Sync` runner (`SendAndSettle`/`Settle`/`Advance`),
       `ManualClock`, `ManualTimerService` (D53).
 
 **Acceptance:** a hand-written childless machine (the `order` chart minus
@@ -181,22 +184,22 @@ close/drain semantics; `go test -race` clean (the gate, D31).
 **Goal:** "everything is an actor" — the four adapters, the actor tree, and
 schema-driven supervision.
 
-- [ ] `ActorSpec` + typed constructors (D-[ActorSpec](./statesman-architecture.md#actorspec--the-central-polymorphism)):
+- [x] `ActorSpec` + typed constructors (D-[ActorSpec](./statesman-architecture.md#actorspec--the-central-polymorphism)):
       `PromiseActor`, `CallbackActor`, `ObservableActor`, `MachineActor`.
-- [ ] `ActorRef[TCtx,TEvt]` composed capabilities (`Sender`/`Snapshotter`/
+- [x] `ActorRef[TCtx,TEvt]` composed capabilities (`Sender`/`Snapshotter`/
       `Subscriber`/`Addressable`/`io.Closer`); per-adapter ref shapes incl.
       non-sendable `[…,Never]` (D45).
-- [ ] Adapter runtimes: `fromPromise` (one-shot → `done/error.invoke.<id>`),
+- [x] Adapter runtimes: `fromPromise` (one-shot → `done/error.invoke.<id>`),
       `fromCallback` (emit/receive subsets, sendable), `fromObservable`,
       `fromMachine` (nested child actor).
-- [ ] Actor tree: parent ctx → child ctx `WithCancel`; bottom-up shutdown;
+- [x] Actor tree: parent ctx → child ctx `WithCancel`; bottom-up shutdown;
       activity cancellation via `ctx.Done()` (D55); hierarchical addressing
       (D10) — invoke `id`, spawn caller-supplied name.
-- [ ] Supervision (D11): `onDone`/`onError`; event-key split
+- [x] Supervision (D11): `onDone`/`onError`; event-key split
       `done/error.invoke.<id>` vs. `done/error.actor.<address>`; log+stop when no
       `onError`. Terminal actors never restart (retry = state re-entry = fresh
       actor).
-- [ ] Outbox drain wiring: `SendTo<Target>` / `Spawn<Target>` fire after publish.
+- [x] Outbox drain wiring: `SendTo<Target>` / `Spawn<Target>` fire after publish.
 
 **Acceptance:** full `order` example runs under `Sync` with `FakeActor` doubles
 (D53): retry-then-confirm scenario from
@@ -214,27 +217,27 @@ race-clean.
 the core API is a viable codegen target. Build last among the runtime layers,
 per the design (codegen targets a *proven* core).
 
-- [ ] `internal/codegen` go/types resolution pass: load user `.go` + `machine.json`,
+- [x] `internal/codegen` go/types resolution pass: load user `.go` + `machine.json`,
       compute the **unresolved set** shared by `stub` and `generate` (D9, D47).
-- [ ] Naming normalization + hard-fail rules (D22): word-boundary PascalCase;
+- [x] Naming normalization + hard-fail rules (D22): word-boundary PascalCase;
       reject digit-leading / reserved-word / colliding / unresolved names;
       special-case `done.invoke.X`→`XDone`.
-- [ ] Emitters (D14–D20, D32, D43, D45): typed `States` constants; sealed `Event`
+- [x] Emitters (D14–D20, D32, D43, D45): typed `States` constants; sealed `Event`
       `EventType()` helpers; per-target `ActionResult` variants
       (`Assign`/`SendTo<T>`/`Spawn<T>`/`Noop`); `Implementations` with
       per-callsite narrowed methods + union fallback for 2+ transitions;
       codegen-owned `Context` embedding `ContextFields` + typed child refs;
       `Replay<Name>` helpers; `New<M>Machine` + `Restore<M>` constructors closing
       over the opaque applier (D36).
-- [ ] Adapter-kind + subset detection from signatures via go/types (D34): promise
+- [x] Adapter-kind + subset detection from signatures via go/types (D34): promise
       / callback (emit+receive subsets) / observable / machine; cross-package
       `fromMachine` ref typing.
-- [ ] `cmd/statesman` (D49): `init <name>` (runnable `idle→done` + `//go:generate`),
+- [x] `cmd/statesman` (D49): `init <name>` (runnable `idle→done` + `//go:generate`),
       `stub` (append unresolved set to conventional files, idempotent, gofmt;
-      `Impl` skeleton once `machine_gen.go` exists — D47/D48/D51),
+      `Impl` behavior skeleton in `<id>.behavior.go` — D47/D48/D51),
       `generate ./...` (import-topological, leaves-first; `--strict` makes
       surviving `Unspecified` a hard error — D48/D50).
-- [ ] `statesman.Unspecified` (`= any`) alias + the `generate` warning surfacing
+- [x] `statesman.Unspecified` (`= any`) alias + the `generate` warning surfacing
       survivors.
 
 **Acceptance:** `statesman init order2` produces a package where `go test ./...`
@@ -358,19 +361,19 @@ under the existing suite) before 6b–6f.
 **Goal:** the cleanup/verification phase — only started once Phases 1–6
 demonstrably work. Per AGENTS.md, docs/tests/benchmarks land here, not up front.
 
-- [ ] Scenario runner + `.txtar` data fixtures with a generated `TestScenarios(t)`
-      (D53); fixtures double as the parity corpus.
-- [ ] **Semantic parity corpus** run against xstate / the Stately schema
-      validation suite — the missing piece called out in
-      [What this is not yet](./statesman-architecture.md#what-this-is-not-yet).
-- [ ] Benchmarks: mailbox bound, subscriber backpressure, codegen speed (the
+- [x] Scenario runner + `.txtar` data fixtures: exported `RunScenarios(t, dir)`
+      driven by `TestScenarios` (D53); fixtures double as the parity corpus.
+- [x] **Semantic parity corpus** shipped as curated `.txtar` scenarios under
+      `statesmantest/testdata/scenarios` (run by `RunScenarios`), not a generated
+      xstate harness — see DECISIONS ("Parity via a curated txtar corpus").
+- [x] Benchmarks: mailbox bound, subscriber backpressure, codegen speed (the
       "Benchmarked" gap); set defaults from real numbers.
-- [ ] `StallObserver` reference impl + goroutine-id assertions in `-debug`/`-race`
+- [x] `StallObserver` reference impl + goroutine-id assertions in `-debug`/`-race`
       builds (observer-deadlock detection).
-- [ ] Godoc on generated code: panic policy (D39), context immutability (D41),
+- [x] Godoc on generated code: panic policy (D39), context immutability (D41),
       observer-no-`Send` rule.
-- [ ] `DECISIONS.md` entries for any implementation-time decisions (per AGENTS.md).
-- [ ] README + quickstart against the `order` example.
+- [x] `DECISIONS.md` entries for any implementation-time decisions (per AGENTS.md).
+- [x] README + quickstart against the `order` example.
 
 **Acceptance:** parity corpus passes; benchmarks recorded; full
 `go test -race ./...` green across the module.
@@ -381,16 +384,18 @@ demonstrably work. Per AGENTS.md, docs/tests/benchmarks land here, not up front.
 
 ## Milestones
 
-- **M0 — Specs locked** (end Phase 0): transition algorithm + schema subset +
-  persistence contract reviewed; empty module builds.
-- **M1 — Engine proven** (end Phase 2): pure reducer matches every spec trace.
-- **M2 — Core runs** (end Phase 3): childless machine runs race-clean under `Sync`.
-- **M3 — Example green, hand-written** (end Phase 4): full `order` retry-then-
-  confirm passes with `FakeActor`.
-- **M4 — Codegen replaces hand-written** (end Phase 5): `init` package green
-  first run; regenerated `order` passes M3 scenarios.
-- **M5 — Durable** (end Phase 6): crash/restore re-fires effects exactly once.
-- **M6 — v1** (end Phase 7): parity corpus + benchmarks; v1 ships.
+- **M0 — Specs locked** — reached (end Phase 0): transition algorithm + schema
+  subset + persistence contract reviewed; empty module builds.
+- **M1 — Engine proven** — reached (end Phase 2): pure reducer matches every spec trace.
+- **M2 — Core runs** — reached (end Phase 3): childless machine runs race-clean under `Sync`.
+- **M3 — Example green, hand-written** — reached (end Phase 4): full `order`
+  retry-then-confirm passes with `FakeActor`.
+- **M4 — Codegen replaces hand-written** — reached (end Phase 5): `init` package
+  green first run; regenerated `order` passes M3 scenarios.
+- **M5 — Durable** — deferred, post-v1 (end Phase 6): crash/restore re-fires
+  effects exactly once; not started.
+- **M6 — v1 (in-memory)** — reached (end Phase 7): curated txtar parity corpus +
+  benchmarks shipped; v1 ships without the durable layer.
 
 ## Cross-cutting invariants (hold in every phase)
 
@@ -407,19 +412,21 @@ demonstrably work. Per AGENTS.md, docs/tests/benchmarks land here, not up front.
 Distinct from the [v2 candidates](./statesman-architecture.md#open-questions-v2-candidates).
 These must be answered while building the named phase:
 
-- **P2:** exact tie-break when multiple parallel regions select conflicting
-  transitions on one event — pin in `transition-algorithm.md`.
-- **P5:** the callsite→method dispatch table representation behind the opaque
-  applier (D36) — array-indexed vs. map; how `--strict` interacts with fallback
-  methods.
-- **P5:** how go/types resolves adapter **subset** interfaces (D34) when the
-  `emit`/`receive` parameter types are themselves still stubs.
-- **P6:** reflection traversal of `Context` for nested/embedded child refs and
-  interaction with user `SnapshotMarshaler` opt-out (D35).
-- **P6 (seam):** extend `TransitionObserver` vs. a separate optional
+- **P2:** RESOLVED (Phase 2) — parallel conflict tie-break pinned in
+  `transition-algorithm.md` §5.4 `removeConflictingTransitions`: deeper source
+  preempts, else earlier document order; disjoint regions all fire.
+- **P5:** RESOLVED (Phase 5) — callsite→method dispatch is array-indexed: the
+  generated applier is a `switch cs` over integer callsite ids
+  (`internal/codegen` `makeApplier`/`makeGuard`).
+- **P5:** RESOLVED (Phase 5) — adapter **subset** interfaces resolved from
+  signatures via go/types (`internal/codegen/resolve.go`, D34).
+- **P6:** OPEN (Phase 6 not started) — reflection traversal of `Context` for
+  nested/embedded child refs and interaction with user `SnapshotMarshaler`
+  opt-out (D35).
+- **P6 (seam):** OPEN — extend `TransitionObserver` vs. a separate optional
   durable-observer interface for handing over the committed `[]CommittedEffect`
   and the per-effect `OnEffectFired` signal; where `Seq` is assigned and how it
   threads from `Microstep.Effects` through `drainOutbox`.
-- **P6 (atomicity):** snapshot row + transition `EventRecord` atomicity when the
+- **P6 (atomicity):** OPEN — snapshot row + transition `EventRecord` atomicity when the
   backend lacks multi-table transactions — embed the transition record in the
   snapshot row, accept a two-write window, or require a txn-capable store.

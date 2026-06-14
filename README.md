@@ -35,20 +35,20 @@ statesman init checkout      # scaffold a runnable checkout/ package (idle -> do
 ```
 
 `init` writes `checkout/`: `gen.go` (with a `//go:generate statesman generate`
-directive), `machine.json`, `types.go` (event/context stubs), and
-`machine_gen.go` (generated facade) — and it compiles immediately. Then iterate:
+directive), `checkout.machine.json`, `checkout.events.go` (event/context stubs),
+and `checkout.machine.gen.go` (generated facade) — and it compiles immediately. Then iterate:
 
-1. Edit `checkout/machine.json` (or paste the export from Stately Studio).
+1. Edit `checkout/checkout.machine.json` (or paste the export from Stately Studio).
 2. Re-scaffold the new symbols and regenerate:
 
    ```sh
    statesman stub ./checkout       # append stubs for new events/actors/fields + an Impl skeleton (idempotent)
-   go generate ./checkout/         # re-runs `statesman generate` -> machine_gen.go
+   go generate ./checkout/         # re-runs `statesman generate` -> checkout.machine.gen.go
    ```
 
 3. Fill in the `Implementations` methods on the `Impl` skeleton `statesman stub`
-   wrote to `checkout/impl.go` (emitted once the machine has actions, guards, or
-   invokes to implement).
+   wrote to `checkout/checkout.behavior.go` (one panicking method per action,
+   guard, or invoke-input callsite).
 
 Drive it from a test with the deterministic harness:
 
@@ -69,9 +69,9 @@ snap := s.Snapshot()                       // typed: snap.ActiveStates, snap.Con
 ## How it works
 
 ```
-machine.json  --schema.Load-->  *Definition  --NewXxxMachine-->  Machine[TCtx,TEvt]
+<id>.machine.json --schema.Load--> *Definition --NewXxxMachine--> Machine[TCtx,TEvt]
      |                                                                |
-     +-- statesman generate --> machine_gen.go (States, events,       +-- Snapshot[TCtx] (atomic, lock-free)
+     +-- statesman generate --> <id>.machine.gen.go (States, events,  +-- Snapshot[TCtx] (atomic, lock-free)
          Implementations interface, constructor, dispatch tables)
 ```
 

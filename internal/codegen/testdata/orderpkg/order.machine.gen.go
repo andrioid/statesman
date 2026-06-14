@@ -11,7 +11,7 @@ import (
 	"github.com/andrioid/statesman/schema"
 )
 
-//go:embed machine.json
+//go:embed order.machine.json
 var statesmanMachineJSON []byte
 
 var orderDefinition = func() *statesman.Definition {

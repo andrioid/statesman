@@ -21,7 +21,7 @@ func (Submit) orderEvent()  {}
 func (Confirm) orderEvent() {}
 func (Cancel) orderEvent()  {}
 
-// Submit and Confirm get their EventType from machine_gen.go (schema-referenced).
+// Submit and Confirm get their EventType from order.machine.gen.go (schema-referenced).
 // Cancel is not referenced by the schema, so the user authors its EventType.
 func (Cancel) EventType() string { return "CANCEL" }
 

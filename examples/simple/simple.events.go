@@ -8,16 +8,16 @@
 // when it falls below, it switches back to giving. Over many spins the realized
 // RTP converges on the target.
 //
-// machine.json defines the structure; this file the typed event and context;
-// impl.go the behavior (RNG + RTP control); machine_gen.go (from `statesman
-// generate`) wires them. cmd/simple runs it in the terminal — press SPACE to
-// spin. Regenerate with `go generate ./...`.
+// simple.machine.json defines the structure; this file the typed event and
+// context; simple.behavior.go the behavior (RNG + RTP control);
+// simple.machine.gen.go (from `statesman generate`) wires them. cmd/simple runs
+// it in the terminal — press SPACE to spin. Regenerate with `go generate ./...`.
 package simple
 
 import "github.com/andrioid/statesman"
 
 // Event is the sealed per-machine event union. Spin gets its EventType from
-// machine_gen.go; the simpleEvent marker seals the union.
+// simple.machine.gen.go; the simpleEvent marker seals the union.
 type Event interface {
 	statesman.EventBase
 	simpleEvent()
