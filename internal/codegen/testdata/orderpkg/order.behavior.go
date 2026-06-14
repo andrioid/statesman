@@ -20,11 +20,15 @@ func incRetries(ctx Context) ActionResult {
 	return Assign{Fields: ContextFields{UserID: ctx.UserID, Amount: ctx.Amount, Retries: ctx.Retries + 1}}
 }
 
-func (orderImpl) HasRetriesLeftOnChargeError(ctx Context, evt ChargeError) bool {
+// HasRetriesLeft is the context-only fallback for the reused hasRetriesLeft guard
+// (wired on both error.invoke.charge and the charging timeout).
+func (orderImpl) HasRetriesLeft(ctx Context) bool {
 	return ctx.Retries < 3
 }
 
-func (orderImpl) HasRetriesLeftOnProcessingCharging(ctx Context) bool {
+// HasRetriesLeftOnChargeError overrides the fallback for the error.invoke.charge
+// callsite, exercising per-callsite precedence (it can read evt).
+func (orderImpl) HasRetriesLeftOnChargeError(ctx Context, evt ChargeError) bool {
 	return ctx.Retries < 3
 }
 

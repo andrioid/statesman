@@ -131,6 +131,15 @@ states, status, and armed timers onto that tree.
   `recover()` (panics are programming errors).
 - **Context is read-only** in action/guard methods; mutate by returning a new
   value via `ActionResult`.
+- **Retries and timeouts are chart edges, not hidden loops.** A timeout is an
+  `after` on the invoking state; a retry is a guarded `error.invoke.<id>` (or
+  `after`) edge re-entering it. For exponential/jittered backoff (which static
+  `after` delays can't express), `statesman.BackoffActor(clock, timers, delay,
+  onDone)` runs the wait as an invoke on the same `TimerService`; classify
+  failures with `statesman.IsTransient(err)` in the retry guard. `Snapshot.InvokeRestarts`
+  reports per-invoke re-spawns so an observer can alarm on a runaway retry loop.
+- **`statesman generate` warns** when a promise invoke has no `onError` and no
+  `after`: a failed or hung call then has no exit and stalls the actor.
 
 ## Performance
 

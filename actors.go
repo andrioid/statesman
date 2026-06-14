@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"time"
 )
 
 // --- Actor capability interfaces (composed à la io) -----------------
@@ -109,7 +110,29 @@ func (m *Machine[TCtx, TEvt]) reconcileInvokes() {
 			}
 		}
 		m.children[id] = &runningChild{id: id, address: addr, cancel: stop, deliver: ri.Deliver}
+		if m.invokeSpawns == nil {
+			m.invokeSpawns = make(map[string]int)
+		}
+		m.invokeSpawns[id]++
 	}
+}
+
+// restartsSnapshot returns the per-invoke restart count (spawns beyond the first)
+// for the next published snapshot, or nil when nothing has restarted. Runs on the
+// actor goroutine; the returned map is frozen — never mutated after publication —
+// so lock-free readers of the snapshot see a stable value.
+func (m *Machine[TCtx, TEvt]) restartsSnapshot() map[string]int {
+	var out map[string]int
+	for id, n := range m.invokeSpawns {
+		if n <= 1 {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]int, len(m.invokeSpawns))
+		}
+		out[id] = n - 1
+	}
+	return out
 }
 
 func (m *Machine[TCtx, TEvt]) childByAddress(addr ActorAddress) *runningChild {
@@ -244,5 +267,37 @@ func MachineActor[TCtx any, TEvt EventBase, CCtx any, CEvt EventBase](
 			}
 		}
 		return RunningInvoke{Cancel: func() { _ = child.Close() }, Deliver: deliver}
+	}
+}
+
+// BackoffActor adapts a context-reading delay into an InvokeRunner for dynamic
+// (exponential / jittered) backoff that the static `after` delays cannot express
+// (resolveDelay sees no context). On spawn it schedules a timer for
+// delay(parentCtx) from clock.Now() via timers; on fire it emits onDone — wire
+// that to the backoff state's done.invoke.<id> edge. State exit cancels the child,
+// which cancels the timer, and no event is emitted.
+//
+// Pass the same Clock/TimerService the machine runs on (the ManualTimerService in
+// a Sync test, the in-process or DB-backed one in production) so the wait advances
+// on that clock. Wire it with RegisterInvoke: the schema's `invoke.src` carries no
+// signature for codegen to detect, so generated constructors do not emit it.
+//
+// Backoff is an invoke, not a durable `after`, so the remaining wait is not
+// recorded in Snapshot.PendingAfter. The attempt counter you read in delay lives
+// in Context (durable), so a restart recomputes the delay from the persisted count.
+func BackoffActor[TCtx any, TEvt EventBase](
+	clock Clock,
+	timers TimerService,
+	delay func(TCtx) time.Duration,
+	onDone func() TEvt,
+) InvokeRunner[TCtx, TEvt] {
+	return func(ctx context.Context, parentCtx TCtx, _ ActorAddress, emit func(TEvt)) RunningInvoke {
+		timer := timers.Schedule(ctx, clock.Now().Add(delay(parentCtx)), func() {
+			if ctx.Err() != nil {
+				return // cancelled on state exit; no event for a stopped backoff
+			}
+			emit(onDone())
+		})
+		return RunningInvoke{Cancel: func() { timer.Cancel() }}
 	}
 }

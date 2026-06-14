@@ -17,6 +17,12 @@ type Snapshot[TCtx any] struct {
 	// Version is monotonic per actor, incremented by 1 on each completed
 	// transition. The durable layer uses it for optimistic concurrency.
 	Version int
+	// InvokeRestarts maps an invoke id to the number of times it has been
+	// re-spawned beyond its first spawn (a state re-entered after exit re-invokes
+	// a fresh actor). Empty/nil when nothing has restarted. Reflects spawns up to
+	// the prior macrostep; lets an observer alarm on a runaway retry loop that the
+	// always-loop guard (which only covers eventless chains) cannot catch.
+	InvokeRestarts map[string]int
 }
 
 // ChildRef is the serialized stand-in for a typed child actor ref held inside a

@@ -116,6 +116,9 @@ func generate(dir string) error {
 	if bytes.Contains(src, []byte("statesman.Unspecified")) {
 		fmt.Fprintf(os.Stderr, "%s: warning: statesman.Unspecified survives in generated code; fill the TODO types\n", out)
 	}
+	for _, w := range codegen.Warnings(res, def) {
+		fmt.Fprintf(os.Stderr, "%s: warning: %s\n", filepath.Join(dir, def.ID+".machine.json"), w)
+	}
 	fmt.Printf("wrote %s\n", out)
 	return nil
 }

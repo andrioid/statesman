@@ -353,7 +353,15 @@ func (g *gen) implMethods() []implMethod {
 		}
 		add(name, fmt.Sprintf("%s(ctx Context) ActionResult", name))
 	}
+	gcounts := g.guardTypeCounts()
 	for _, c := range g.guards {
+		gt := NormalizeName(c.typ)
+		if gcounts[gt] > 1 {
+			// Reused guard type: one context-only fallback; per-callsite methods
+			// become optional overrides (decision 15).
+			add(gt, fmt.Sprintf("%s(ctx Context) bool", gt))
+			continue
+		}
 		name := methodName(c)
 		if c.evented {
 			ev, _ := EventGoName(c.event)
@@ -498,10 +506,34 @@ func (g *gen) emitApplier(b *strings.Builder) {
 	b.WriteString("\t}\n\treturn statesman.AppliedEffect[Context]{Kind: statesman.EffectNoop}\n}\n\n")
 }
 
+// guardTypeCounts counts how many callsites each (normalized) guard type is wired
+// on. A type on 2+ callsites gets one context-only fallback method in
+// Implementations; its per-callsite methods become optional overrides the guard
+// dispatch prefers when present (decision 15).
+func (g *gen) guardTypeCounts() map[string]int {
+	counts := map[string]int{}
+	for _, c := range g.guards {
+		counts[NormalizeName(c.typ)]++
+	}
+	return counts
+}
+
 func (g *gen) emitGuardEval(b *strings.Builder) {
 	b.WriteString("func makeGuard(impl Implementations) func(int, Context, Event) bool {\n")
 	b.WriteString("\treturn func(cs int, ctx Context, evt Event) bool {\n\t\tswitch cs {\n")
+	gcounts := g.guardTypeCounts()
 	for _, c := range g.guards {
+		gt := NormalizeName(c.typ)
+		if gcounts[gt] > 1 {
+			over := methodName(c)
+			if c.evented {
+				ev, _ := EventGoName(c.event)
+				fmt.Fprintf(b, "\t\tcase %d:\n\t\t\tif o, ok := impl.(interface{ %s(Context, %s) bool }); ok {\n\t\t\t\treturn o.%s(ctx, evt.(%s))\n\t\t\t}\n\t\t\treturn impl.%s(ctx)\n", c.id, over, ev, over, ev, gt)
+			} else {
+				fmt.Fprintf(b, "\t\tcase %d:\n\t\t\tif o, ok := impl.(interface{ %s(Context) bool }); ok {\n\t\t\t\treturn o.%s(ctx)\n\t\t\t}\n\t\t\treturn impl.%s(ctx)\n", c.id, over, over, gt)
+			}
+			continue
+		}
 		name := methodName(c)
 		if c.evented {
 			ev, _ := EventGoName(c.event)

@@ -84,8 +84,7 @@ type Implementations interface {
 	ValidateFormOnSubmit(ctx Context, evt Submit) ActionResult
 	IncrementRetriesOnProcessingCharging(ctx Context) ActionResult
 	IncrementRetriesOnChargeError(ctx Context, evt ChargeError) ActionResult
-	HasRetriesLeftOnProcessingCharging(ctx Context) bool
-	HasRetriesLeftOnChargeError(ctx Context, evt ChargeError) bool
+	HasRetriesLeft(ctx Context) bool
 	ChargeCardInput(ctx Context) ChargeInput
 }
 
@@ -133,9 +132,17 @@ func makeGuard(impl Implementations) func(int, Context, Event) bool {
 	return func(cs int, ctx Context, evt Event) bool {
 		switch cs {
 		case 0:
-			return impl.HasRetriesLeftOnProcessingCharging(ctx)
+			if o, ok := impl.(interface{ HasRetriesLeftOnProcessingCharging(Context) bool }); ok {
+				return o.HasRetriesLeftOnProcessingCharging(ctx)
+			}
+			return impl.HasRetriesLeft(ctx)
 		case 1:
-			return impl.HasRetriesLeftOnChargeError(ctx, evt.(ChargeError))
+			if o, ok := impl.(interface {
+				HasRetriesLeftOnChargeError(Context, ChargeError) bool
+			}); ok {
+				return o.HasRetriesLeftOnChargeError(ctx, evt.(ChargeError))
+			}
+			return impl.HasRetriesLeft(ctx)
 		}
 		return true
 	}

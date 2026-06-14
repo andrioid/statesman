@@ -105,3 +105,40 @@ func waitForState(t *testing.T, m *statesman.Machine[oCtx, oEvt], id statesman.S
 	}
 	t.Fatalf("state %q not reached within %v; active = %v", id, timeout, m.Snapshot().ActiveStates)
 }
+
+// TestInvokeRestartCountSurfaced drives one fail->retry->re-invoke of "charge"
+// and asserts the snapshot reports the restart (spawns beyond the first), while a
+// once-spawned invoke ("inventory") never appears.
+func TestInvokeRestartCountSurfaced(t *testing.T) {
+	ctx := context.Background()
+	rec := &statesmantest.CommandRecorder[oEvt]{}
+	s := newOrderSync(t)
+	s.M.RegisterInvoke("charge", statesmantest.FakeActor[oCtx, oEvt](
+		oEvt{"error.invoke.charge"}, // attempt 1 fails
+		oEvt{"done.invoke.charge"},  // attempt 2 (after re-invoke) succeeds
+	))
+	s.M.RegisterInvoke("inventory", statesmantest.FakeCallback[oCtx, oEvt, oEvt](rec))
+	if err := s.Start(ctx, "order-1"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+
+	// First spawn of charge: not a restart yet.
+	mustSend(t, s, "SUBMIT")
+	if got := s.Snapshot().InvokeRestarts["charge"]; got != 0 {
+		t.Fatalf("after first spawn, charge restarts = %d, want 0", got)
+	}
+
+	// Backoff elapses -> re-enter charging -> charge re-invoked (a restart),
+	// attempt 2 succeeds -> confirming. The restart is visible by then.
+	if err := s.Advance(ctx, 5*time.Second); err != nil {
+		t.Fatalf("advance: %v", err)
+	}
+	snap := s.Snapshot()
+	if got := snap.InvokeRestarts["charge"]; got != 1 {
+		t.Fatalf("charge restarts = %d, want 1 (active=%v)", got, snap.ActiveStates)
+	}
+	if _, ok := snap.InvokeRestarts["inventory"]; ok {
+		t.Fatalf("inventory should not appear in restarts: %v", snap.InvokeRestarts)
+	}
+	_ = s.M.Close()
+}

@@ -69,10 +69,11 @@ type Machine[TCtx any, TEvt EventBase] struct {
 	wg            sync.WaitGroup
 
 	// actor-goroutine-owned (no external access):
-	version   int
-	localSubs []*subscriber[TCtx]
-	armed     map[*StateNode][]armedTimer
-	children  map[string]*runningChild // invoke id -> running child actor
+	version      int
+	localSubs    []*subscriber[TCtx]
+	armed        map[*StateNode][]armedTimer
+	children     map[string]*runningChild // invoke id -> running child actor
+	invokeSpawns map[string]int           // invoke id -> total spawns (for restart count)
 }
 
 type inboxItem[TEvt EventBase] struct {
@@ -418,13 +419,14 @@ func (m *Machine[TCtx, TEvt]) execMicrostep(ms *Microstep[TCtx]) bool {
 	}
 	pending := m.plannedPending(ms)
 	after := Snapshot[TCtx]{
-		MachineID:    m.def.ID,
-		Address:      m.addr,
-		ActiveStates: ms.NextActive,
-		Context:      ms.NextContext,
-		PendingAfter: pending,
-		Status:       status,
-		Version:      m.version + 1,
+		MachineID:      m.def.ID,
+		Address:        m.addr,
+		ActiveStates:   ms.NextActive,
+		Context:        ms.NextContext,
+		PendingAfter:   pending,
+		Status:         status,
+		Version:        m.version + 1,
+		InvokeRestarts: m.restartsSnapshot(),
 	}
 	evt := m.eng.triggerEvent()
 	for _, o := range m.transitionObs {

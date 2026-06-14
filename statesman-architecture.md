@@ -658,15 +658,16 @@ func (m *Machine[TCtx, TEvt]) Address() ActorAddress
 func (m *Machine[TCtx, TEvt]) AddObserver(o any) // type-asserts to the observer interfaces; the one intentional `any` at the registration boundary
 
 type Snapshot[TCtx any] struct {
-    MachineID    string
-    Address      ActorAddress
-    ActiveStates []StateID                // typed; not raw strings
-    Context      TCtx                     // typed, not json.RawMessage
-    PendingAfter []ScheduledTimer
-    Children     []ChildRef
-    Status       ActorStatus
-    ErrorReason  error                    // non-nil iff Status == Error
-    Version      int                      // monotonic per actor, incremented on each completed transition
+    MachineID      string
+    Address        ActorAddress
+    ActiveStates   []StateID              // typed; not raw strings
+    Context        TCtx                   // typed, not json.RawMessage
+    PendingAfter   []ScheduledTimer
+    Children       []ChildRef
+    Status         ActorStatus
+    ErrorReason    error                  // non-nil iff Status == Error
+    Version        int                    // monotonic per actor, incremented on each completed transition
+    InvokeRestarts map[string]int         // per-invoke re-spawns beyond the first (retry-storm signal); nil when none
 }
 ```
 
@@ -1194,3 +1195,8 @@ func TestRetryThenConfirm(t *testing.T) {
 | 54 | Timeouts | A timeout is a plain `after` transition on the invoking state — standard Stately semantics, **visible in the chart**; firing exits the state (aborting the activity via ctx cancel) and takes the drawn edge. Reuses `after` timing/durability (decision 52); route it to the retry path or a distinct `timedOut`. The policy is in the schema, not in Go |
 | 55 | Activity cancellation | State exit cancels in-flight activities via ctx (`ctx.Done()` → adapter aborts); the timeout / failure / cancel distinction lives in the chart (the `after` edge, `error.invoke.<id>`, or a `CANCEL` event), never in a ctx cause. Business cancel is a `CANCEL` event, never a raw ctx cancel |
 | 56 | Diagram rendering | `statesman/diagram` (public package) walks a `Definition` once to emit either a Mermaid `stateDiagram-v2` string or a Unicode/ANSI outline tree; no image output (Mermaid is handed to whatever already renders it — editor preview, GitHub, `mmdr`), so zero render dependencies. `diagram --watch` re-renders on `machine.json` mtime changes (polling, not fsnotify; keeps the last valid render when an edit fails to parse). `diagram.Live` overlays a running machine's active states/status/timers via `Subscribe`, showing only that machine's own configuration |
+| 57 | Dynamic backoff | `after` delays are static (`resolveDelay` sees no context), so `statesman.BackoffActor(clock, timers, delay func(TCtx) time.Duration, onDone)` runs exponential/jittered backoff as an invoke on the machine's `TimerService` (virtual-time-testable), wired via `RegisterInvoke`. Not a durable `after` (wait absent from `PendingAfter`); the attempt counter in `Context` is durable, so a restart recomputes the delay |
+| 58 | Guard union fallback | A guard `type` on 2+ callsites generates one context-only fallback `<Type>(ctx Context) bool` in `Implementations`; per-callsite methods become optional overrides the dispatch prefers via a runtime interface assertion (D15 semantics realized for guards; actions still per-callsite) |
+| 59 | Promise-invoke lint | `statesman generate` warns (advisory, `codegen.Warnings`) when a promise invoke has no `onError` and no `after` on its state or any ancestor — a failed or hung call then has no automatic exit and stalls the actor |
+| 60 | Transient classifier | `statesman.IsTransient(err)` reports retryable transport timeouts (`context.DeadlineExceeded`, `os.ErrDeadlineExceeded`, `net.Error.Timeout()`, unwrapping); excludes `context.Canceled` and domain errors. For the universal half of retryable-vs-fatal in an `error.invoke.<id>` guard |
+| 61 | Invoke restart count | `Snapshot.InvokeRestarts map[string]int` surfaces per-invoke re-spawns (state re-entered after exit), counted in `reconcileInvokes` and frozen per snapshot, so an observer can alarm on a runaway timed retry loop the always-loop guard cannot catch |
