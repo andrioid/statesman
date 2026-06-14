@@ -1,0 +1,36 @@
+{
+  "$schema": "https://raw.githubusercontent.com/statelyai/schema/refs/heads/main/machineSchema.json",
+  "description": "Sub-machine: edit -> test -> re-edit loop for one issue, bounded by an internal attempt budget.",
+  "id": "fix",
+  "initial": "editing",
+  "states": {
+    "editing": {
+      "description": "Invokes the fixing agent (shell) to apply a patch.",
+      "invoke": [
+        {
+          "id": "edit",
+          "src": "applyEdit",
+          "onDone": { "target": "testing", "actions": [{ "type": "savePatch" }] },
+          "onError": { "target": "failed" }
+        }
+      ]
+    },
+    "testing": {
+      "description": "Runs the test command. Pass -> done; fail with budget left -> re-edit; else fail.",
+      "invoke": [
+        {
+          "id": "test",
+          "src": "runTests",
+          "onDone": [
+            { "guard": { "type": "testsPassed" }, "target": "done" },
+            { "guard": { "type": "canRetry" }, "target": "editing", "actions": [{ "type": "nextAttempt" }] },
+            { "target": "failed" }
+          ],
+          "onError": { "target": "failed" }
+        }
+      ]
+    },
+    "done": { "description": "Tests pass.", "type": "final" },
+    "failed": { "description": "Edit failed or the attempt budget ran out.", "type": "final" }
+  }
+}

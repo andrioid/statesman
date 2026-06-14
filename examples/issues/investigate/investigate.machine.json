@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/statelyai/schema/refs/heads/main/machineSchema.json",
+  "description": "Sub-machine: runs code analysis for one issue and leaves findings in its terminal context.",
+  "id": "investigate",
+  "initial": "analysing",
+  "states": {
+    "analysing": {
+      "description": "Invokes the code-analysis agent (shell).",
+      "invoke": [
+        {
+          "id": "analyse",
+          "src": "analyseCode",
+          "onDone": { "target": "done", "actions": [{ "type": "saveFindings" }] },
+          "onError": { "target": "failed" }
+        }
+      ],
+      "after": { "AnalyseTimeout": { "target": "failed" } }
+    },
+    "done": { "description": "Findings ready.", "type": "final" },
+    "failed": { "description": "Analysis failed or timed out.", "type": "final" }
+  }
+}

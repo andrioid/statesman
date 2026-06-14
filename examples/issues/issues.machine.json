@@ -5,25 +5,114 @@
    "initial": "collecting",
    "states": {
       "collecting": {
-         "description": "Fetches, parses and packages issue information",
-         "always": { "target": "classifying", "guard": { "type": "isPackageReady" } }
+         "description": "Fetches, parses and packages issue information (gh read). Wrapped in the retry/timeout pattern: per-attempt CollectAttemptTimeout, overall CollectDeadline, error+timeout funnel into a backoff loop.",
+         "initial": "fetching",
+         "after": { "CollectDeadline": { "target": "#failed" } },
+         "states": {
+            "fetching": {
+               "invoke": [
+                  {
+                     "id": "collect",
+                     "src": "collectIssue",
+                     "onDone": { "target": "#classifying", "actions": [{ "type": "savePackage" }] },
+                     "onError": [
+                        { "guard": { "type": "shouldRetry" }, "target": "backingOff", "actions": [{ "type": "recordFailure" }] },
+                        { "target": "#failed" }
+                     ]
+                  }
+               ],
+               "after": {
+                  "CollectAttemptTimeout": [
+                     { "guard": { "type": "hasAttemptsLeft" }, "target": "backingOff" },
+                     { "target": "#failed" }
+                  ]
+               }
+            },
+            "backingOff": {
+               "description": "Fixed backoff. For exponential/jitter, swap this `after` for a `backoff` invoke wired to statesman.BackoffActor.",
+               "after": { "CollectBackoff": { "target": "fetching", "actions": [{ "type": "nextAttempt" }] } }
+            }
+         }
       },
       "classifying": {
-         "description": "",
-         "always": { "target": "investigating", "guard": { "type": "isClassified" } }
+         "description": "One-shot LLM classifies the issue (bug / question / duplicate / invalid). onDone branches: actionable bugs investigate, the rest skip straight to summarising.",
+         "invoke": [
+            {
+               "id": "classify",
+               "src": "classifyIssue",
+               "onDone": [
+                  { "guard": { "type": "isActionable" }, "target": "investigating", "actions": [{ "type": "saveClassification" }] },
+                  { "target": "summarising", "actions": [{ "type": "saveClassification" }] }
+               ],
+               "onError": { "target": "failed" }
+            }
+         ],
+         "after": { "ClassifyTimeout": { "target": "failed" } }
       },
       "investigating": {
-         "description": "Investigating effort from sources like code analysis"
+         "description": "Sub-machine: code analysis / repro / root-cause. Owns its own internal retries; onError still produces a summary.",
+         "invoke": [
+            {
+               "id": "investigate",
+               "src": "investigate",
+               "onDone": { "target": "fixing", "actions": [{ "type": "saveFindings" }] },
+               "onError": { "target": "summarising" }
+            }
+         ]
+      },
+      "fixing": {
+         "description": "Sub-machine: edit -> test -> re-edit loop. Internal retries; a failed fix is still summarised.",
+         "invoke": [
+            {
+               "id": "fix",
+               "src": "fix",
+               "onDone": { "target": "summarising", "actions": [{ "type": "savePatch" }] },
+               "onError": { "target": "summarising" }
+            }
+         ]
       },
       "summarising": {
-         "always": { "target": "syncing" }
+         "description": "One-shot LLM writes the human-facing summary/comment.",
+         "invoke": [
+            {
+               "id": "summarise",
+               "src": "summariseIssue",
+               "onDone": { "target": "syncing", "actions": [{ "type": "saveSummary" }] },
+               "onError": { "target": "failed" }
+            }
+         ],
+         "after": { "SummariseTimeout": { "target": "failed" } }
       },
       "syncing": {
-         "description": "Syncing state with GitHub",
-         "always": { "target": "finished", "guard": { "type": "isFinished" } }
+         "description": "Syncs state back to GitHub (gh write). Same retry/timeout pattern as collecting; idempotency lives in the syncIssue adapter (dedupe marker), not the chart.",
+         "initial": "posting",
+         "after": { "SyncDeadline": { "target": "#failed" } },
+         "states": {
+            "posting": {
+               "invoke": [
+                  {
+                     "id": "sync",
+                     "src": "syncIssue",
+                     "onDone": { "target": "#finished" },
+                     "onError": [
+                        { "guard": { "type": "shouldRetry" }, "target": "backingOff", "actions": [{ "type": "recordFailure" }] },
+                        { "target": "#failed" }
+                     ]
+                  }
+               ],
+               "after": {
+                  "SyncAttemptTimeout": [
+                     { "guard": { "type": "hasAttemptsLeft" }, "target": "backingOff" },
+                     { "target": "#failed" }
+                  ]
+               }
+            },
+            "backingOff": {
+               "after": { "SyncBackoff": { "target": "posting", "actions": [{ "type": "nextAttempt" }] } }
+            }
+         }
       },
-      "finished": {
-         "description": "Final state"
-      }
+      "failed": { "description": "Terminal: the run could not complete.", "type": "final" },
+      "finished": { "description": "Terminal: issue triaged and synced.", "type": "final" }
    }
 }
