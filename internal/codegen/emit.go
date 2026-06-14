@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/format"
 	"go/types"
+	"path"
 	"sort"
 	"strings"
 
@@ -29,7 +30,15 @@ func Emit(res *Resolution, def *statesman.Definition) ([]byte, error) {
 	if g.usesTime() {
 		b.WriteString("\t\"time\"\n")
 	}
-	b.WriteString("\n\t\"github.com/andrioid/statesman\"\n\t\"github.com/andrioid/statesman/schema\"\n)\n\n")
+	b.WriteString("\n\t\"github.com/andrioid/statesman\"\n\t\"github.com/andrioid/statesman/schema\"\n")
+	for _, p := range g.childPackages() {
+		if p.Name() == path.Base(p.Path()) {
+			fmt.Fprintf(&b, "\t%q\n", p.Path())
+		} else {
+			fmt.Fprintf(&b, "\t%s %q\n", p.Name(), p.Path())
+		}
+	}
+	b.WriteString(")\n\n")
 
 	g.emitDefinition(&b)
 	g.emitStates(&b)
@@ -235,8 +244,19 @@ func (g *gen) invokeOutputs() map[string]string {
 	var visit func(n *statesman.StateNode)
 	visit = func(n *statesman.StateNode) {
 		for _, iv := range n.Invokes {
-			if a := g.res.Actors[iv.Src]; a != nil && a.Out != nil {
-				m[iv.ID] = g.typeString(a.Out)
+			a := g.res.Actors[iv.Src]
+			if a == nil {
+				continue
+			}
+			switch a.Kind {
+			case AdapterPromise:
+				if a.Out != nil {
+					m[iv.ID] = g.typeString(a.Out)
+				}
+			case AdapterMachine:
+				if a.In != nil {
+					m[iv.ID] = g.typeString(a.In) // done payload = child's final Context
+				}
 			}
 		}
 		for _, c := range n.Children {
@@ -245,6 +265,40 @@ func (g *gen) invokeOutputs() map[string]string {
 	}
 	visit(g.def.Root)
 	return m
+}
+
+// childPackages returns the distinct non-local packages whose types the generated
+// file references via machine invokes (child Context/Event), sorted by import
+// path — used to emit their imports.
+func (g *gen) childPackages() []*types.Package {
+	seen := map[string]bool{}
+	var out []*types.Package
+	add := func(t types.Type) {
+		named, ok := t.(*types.Named)
+		if !ok || named.Obj().Pkg() == nil || named.Obj().Pkg() == g.localPkg {
+			return
+		}
+		p := named.Obj().Pkg()
+		if !seen[p.Path()] {
+			seen[p.Path()] = true
+			out = append(out, p)
+		}
+	}
+	var visit func(n *statesman.StateNode)
+	visit = func(n *statesman.StateNode) {
+		for _, iv := range n.Invokes {
+			if a := g.res.Actors[iv.Src]; a != nil && a.Kind == AdapterMachine {
+				add(a.In)
+				add(a.Out)
+			}
+		}
+		for _, c := range n.Children {
+			visit(c)
+		}
+	}
+	visit(g.def.Root)
+	sort.Slice(out, func(i, j int) bool { return out[i].Path() < out[j].Path() })
+	return out
 }
 
 // eventMarker returns the sealed Event interface's unexported marker method name.
@@ -407,7 +461,7 @@ func (g *gen) inputMappers() []inputMapper {
 	visit = func(n *statesman.StateNode) {
 		for _, iv := range n.Invokes {
 			a := g.res.Actors[iv.Src]
-			if a == nil || a.Kind != AdapterPromise || a.In == nil {
+			if a == nil || a.In == nil || (a.Kind != AdapterPromise && a.Kind != AdapterMachine) {
 				continue
 			}
 			out = append(out, inputMapper{invokeID: iv.ID, src: iv.Src, method: NormalizeName(iv.Src) + "Input", inType: g.typeString(a.In)})
@@ -463,6 +517,14 @@ func (g *gen) emitRegisterInvokes(b *strings.Builder) {
 				fmt.Fprintf(b, "\tm.RegisterInvoke(%q, statesman.CallbackActor[Context, Event, %s](\n", iv.ID, cmd)
 				fmt.Fprintf(b, "\t\tfunc(ctx context.Context, emit func(Event), recv <-chan %s) error {\n", cmd)
 				fmt.Fprintf(b, "\t\t\treturn %s(ctx, func(e %s) { emit(e) }, recv)\n\t\t}, nil, nil))\n", a.GoName, emitType)
+			case AdapterMachine:
+				doneName, _ := EventGoName("done.invoke." + iv.ID)
+				errName, _ := EventGoName("error.invoke." + iv.ID)
+				cctx := g.typeString(a.In)
+				fmt.Fprintf(b, "\tm.RegisterInvoke(%q, statesman.MachineActor[Context, Event, %s, %s](%s, impl.%sInput,\n",
+					iv.ID, cctx, g.typeString(a.Out), a.GoName, NormalizeName(iv.Src))
+				fmt.Fprintf(b, "\t\tfunc(s statesman.Snapshot[%s]) Event { return %s{Output: s.Context} },\n", cctx, doneName)
+				fmt.Fprintf(b, "\t\tfunc(s statesman.Snapshot[%s]) Event { return %s{Err: s.ErrorReason} }))\n", cctx, errName)
 			}
 		}
 		for _, c := range n.Children {

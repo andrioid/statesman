@@ -48,8 +48,8 @@ type ActorSym struct {
 	GoName string
 	Func   *types.Func
 	Kind   AdapterKind
-	In     types.Type // promise input (nil otherwise)
-	Out    types.Type // promise output (nil otherwise)
+	In     types.Type // promise input, or child Context (CCtx) for a machine; nil otherwise
+	Out    types.Type // promise output, or child Event (CEvt) for a machine; nil otherwise
 }
 
 // Unresolved is a schema reference with no matching Go symbol — the set `stub`
@@ -191,7 +191,10 @@ func detectKind(sig *types.Signature) (AdapterKind, types.Type, types.Type) {
 	case p.Len() == 2 && r.Len() == 1 && isContextType(p.At(0).Type()) && isErrorType(r.At(0).Type()) && isFuncType(p.At(1).Type()):
 		return AdapterObservable, nil, nil
 	case p.Len() == 0 && r.Len() == 1:
-		return AdapterMachine, nil, nil
+		if cctx, cevt, ok := machineTypeArgs(r.At(0).Type()); ok {
+			return AdapterMachine, cctx, cevt
+		}
+		return AdapterUnknown, nil, nil
 	default:
 		return AdapterUnknown, nil, nil
 	}
@@ -217,4 +220,25 @@ func isFuncType(t types.Type) bool {
 func isRecvChan(t types.Type) bool {
 	ch, ok := t.Underlying().(*types.Chan)
 	return ok && (ch.Dir() == types.RecvOnly || ch.Dir() == types.SendRecv)
+}
+
+// machineTypeArgs extracts CCtx, CEvt from a *statesman.Machine[CCtx, CEvt]
+// return type — the fromMachine adapter shape (`func() *statesman.Machine[...]`).
+func machineTypeArgs(t types.Type) (cctx, cevt types.Type, ok bool) {
+	ptr, ok := t.(*types.Pointer)
+	if !ok {
+		return nil, nil, false
+	}
+	named, ok := ptr.Elem().(*types.Named)
+	if !ok || named.Obj().Pkg() == nil {
+		return nil, nil, false
+	}
+	if named.Obj().Pkg().Path() != "github.com/andrioid/statesman" || named.Obj().Name() != "Machine" {
+		return nil, nil, false
+	}
+	args := named.TypeArgs()
+	if args.Len() != 2 {
+		return nil, nil, false
+	}
+	return args.At(0), args.At(1), true
 }

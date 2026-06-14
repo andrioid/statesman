@@ -178,6 +178,16 @@ func (m *Machine[TCtx, TEvt]) Start(ctx context.Context, address string) error {
 	return err
 }
 
+// SetInitialContext overrides the initial context before Start. It is the seam
+// MachineActor uses to seed a child sub-machine with input derived from its
+// parent; a no-op once the machine has started.
+func (m *Machine[TCtx, TEvt]) SetInitialContext(ctx TCtx) {
+	if m.started.Load() {
+		return
+	}
+	m.initCtx = ctx
+}
+
 // Send blocks until the event is enqueued, the actor stops, or ctx is cancelled.
 func (m *Machine[TCtx, TEvt]) Send(ctx context.Context, evt TEvt) error {
 	if !m.started.Load() || m.stopped() {

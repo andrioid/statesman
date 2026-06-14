@@ -1,0 +1,18 @@
+{
+  "id": "parent",
+  "initial": "running",
+  "states": {
+    "running": {
+      "invoke": [
+        {
+          "id": "run",
+          "src": "runChild",
+          "onDone": { "target": "done" },
+          "onError": { "target": "failed" }
+        }
+      ]
+    },
+    "done": { "type": "final" },
+    "failed": { "type": "final" }
+  }
+}

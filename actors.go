@@ -238,16 +238,24 @@ func ObservableActor[TCtx any, TEvt EventBase, Out any](
 	}
 }
 
-// MachineActor adapts a nested child Machine (fromMachine). The child runs at the
-// invoke address; its terminal status maps to the parent's done/error event. The
-// child is sendable: SendTo commands of the child's event type route to its
-// mailbox.
+// MachineActor adapts a nested child Machine (fromMachine). newChild builds a
+// fresh child per spawn (so a re-entered invoke restarts cleanly); input seeds the
+// child's initial context from the parent before Start, the machine analogue of a
+// promise's input mapper. The child runs at the invoke address; its terminal
+// status maps to the parent's done/error event (the done payload is the child's
+// final Context). The child is sendable: SendTo commands of the child's event type
+// route to its mailbox.
 func MachineActor[TCtx any, TEvt EventBase, CCtx any, CEvt EventBase](
-	child *Machine[CCtx, CEvt],
+	newChild func() *Machine[CCtx, CEvt],
+	input func(TCtx) CCtx,
 	onDone func(Snapshot[CCtx]) TEvt,
 	onError func(Snapshot[CCtx]) TEvt,
 ) InvokeRunner[TCtx, TEvt] {
-	return func(ctx context.Context, _ TCtx, addr ActorAddress, emit func(TEvt)) RunningInvoke {
+	return func(ctx context.Context, parentCtx TCtx, addr ActorAddress, emit func(TEvt)) RunningInvoke {
+		child := newChild()
+		if input != nil {
+			child.SetInitialContext(input(parentCtx))
+		}
 		child.Subscribe(ctx, func(s Snapshot[CCtx]) {
 			switch s.Status {
 			case StatusDone:
