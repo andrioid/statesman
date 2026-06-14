@@ -1,0 +1,30 @@
+stateDiagram-v2
+    state playing {
+        state playing_audio {
+            [*] --> playing_audio_low
+            state playing_audio_low
+            state playing_audio_high
+        }
+        --
+        state playing_playback {
+            [*] --> playing_playback_normal
+            state playing_playback_normal
+            state playing_playback_ff
+        }
+    }
+    state paused {
+        [*] --> paused_idle
+        state paused_idle
+        state paused_hist
+        note right of paused_hist : history (deep)
+    }
+    state stopped
+    [*] --> playing
+    playing --> stopped : STOP
+    playing --> paused_hist : PAUSE
+    playing_audio_low --> playing_audio_high : VOLUP
+    playing_audio_high --> playing_audio_low : VOLDOWN
+    playing_playback_normal --> playing_playback_ff : FAST
+    playing_playback_ff --> playing_playback_normal : PLAY
+    paused_idle --> playing : RESUME
+    stopped --> [*]

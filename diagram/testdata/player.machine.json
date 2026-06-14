@@ -1,0 +1,39 @@
+{
+  "id": "player",
+  "initial": "playing",
+  "states": {
+    "playing": {
+      "type": "parallel",
+      "on": {
+        "STOP": { "target": "stopped" },
+        "PAUSE": { "target": "#hist" }
+      },
+      "states": {
+        "audio": {
+          "initial": "low",
+          "states": {
+            "low": { "on": { "VOLUP": { "target": "high" } } },
+            "high": { "on": { "VOLDOWN": { "target": "low" } } }
+          }
+        },
+        "playback": {
+          "initial": "normal",
+          "states": {
+            "normal": { "on": { "FAST": { "target": "ff" } } },
+            "ff": { "on": { "PLAY": { "target": "normal" } } }
+          }
+        }
+      }
+    },
+    "paused": {
+      "initial": "idle",
+      "states": {
+        "idle": { "on": { "RESUME": { "target": "#playing" } } },
+        "hist": { "type": "history", "history": "deep" }
+      }
+    },
+    "stopped": {
+      "type": "final"
+    }
+  }
+}

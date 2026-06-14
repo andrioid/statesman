@@ -162,6 +162,13 @@ func (p *parser) parseState(path string, root bool) (*dtoState, error) {
 				return nil, errf(kp, "unknown field %q (additionalProperties:false): \"version\" is only valid at the machine root", key)
 			}
 			err = p.skipValue(kp)
+		case "$schema":
+			// JSON Schema meta-keyword: Stately exports include it at the root so
+			// editors suggest fields and validate. Root-only; loaded-but-ignored.
+			if !root {
+				return nil, errf(kp, "unknown field %q (additionalProperties:false): \"$schema\" is only valid at the machine root", key)
+			}
+			err = p.skipValue(kp)
 		default:
 			return nil, errf(kp, "unknown field %q (additionalProperties:false)", key)
 		}

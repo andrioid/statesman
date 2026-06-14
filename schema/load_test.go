@@ -263,3 +263,34 @@ func TestRejectionFixtures(t *testing.T) {
 		})
 	}
 }
+
+func TestRootSchemaKeyAccepted(t *testing.T) {
+	// Stately Studio exports carry a top-level "$schema" meta-keyword so editors
+	// can suggest fields and validate; the loader accepts and ignores it.
+	src := `{
+		"$schema": "https://raw.githubusercontent.com/statelyai/schema/refs/heads/main/machineSchema.json",
+		"id": "m",
+		"initial": "idle",
+		"states": { "idle": {} }
+	}`
+	def, err := Load([]byte(src))
+	if err != nil {
+		t.Fatalf("Load with root $schema: %v", err)
+	}
+	if def.ID != "m" {
+		t.Errorf("ID = %q, want m", def.ID)
+	}
+}
+
+func TestNestedSchemaKeyRejected(t *testing.T) {
+	// $schema is a document-root meta-keyword; inside a state node it is
+	// meaningless and must be rejected like any other unknown field.
+	src := `{
+		"id": "m",
+		"initial": "idle",
+		"states": { "idle": { "$schema": "x" } }
+	}`
+	if _, err := Load([]byte(src)); err == nil {
+		t.Fatal("nested $schema should be rejected, got nil error")
+	}
+}

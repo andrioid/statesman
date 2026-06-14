@@ -66,6 +66,17 @@ s.Advance(ctx, checkout.RetryDelay)        // fire `after` timers on virtual tim
 snap := s.Snapshot()                       // typed: snap.ActiveStates, snap.Context
 ```
 
+Visualize it — Mermaid for docs, or a live tree in the terminal:
+
+```sh
+statesman diagram ./checkout                 # Mermaid stateDiagram-v2 (e.g. pipe to checkout.mmd)
+statesman diagram ./checkout --format term   # Unicode outline tree in the terminal
+statesman diagram ./checkout --watch         # re-render as you edit the machine.json
+```
+
+`diagram.Live(ctx, machine, os.Stdout)` overlays a running machine's active
+states, status, and armed timers onto that tree.
+
 ## How it works
 
 ```

@@ -1,0 +1,18 @@
+order  ◇→ idle
+  ⟳ inventory (watchInventory)
+├─ idle
+│    SUBMIT → processing
+├─ processing  ◇→ charging
+│  └─ charging
+│       ⏱ 30s [hasRetriesLeft] → retrying
+│       ⏱ 30s → errored
+│       ⟳ charge (chargeCard)
+│         ✓ → confirming
+│         ✗ → retrying [hasRetriesLeft]
+│         ✗ → errored
+├─ retrying
+│    ⏱ RetryDelay → processing.charging
+├─ confirming
+│    CONFIRM → done
+├─ done  ●
+└─ errored  ●

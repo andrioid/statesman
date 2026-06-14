@@ -1,0 +1,20 @@
+player  ◇→ playing
+├─ playing  ∥
+│    STOP → stopped
+│    PAUSE → paused.hist
+│  ├─ audio  ◇→ low
+│  │  ├─ low
+│  │  │    VOLUP → high
+│  │  └─ high
+│  │       VOLDOWN → low
+│  ╪────────
+│  └─ playback  ◇→ normal
+│     ├─ normal
+│     │    FAST → ff
+│     └─ ff
+│          PLAY → normal
+├─ paused  ◇→ idle
+│  ├─ idle
+│  │    RESUME → playing
+│  └─ hist (H*) (default)
+└─ stopped  ●

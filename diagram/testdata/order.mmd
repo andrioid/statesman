@@ -1,0 +1,23 @@
+stateDiagram-v2
+    state idle
+    state processing {
+        [*] --> processing_charging
+        state processing_charging
+    }
+    state retrying
+    state confirming
+    state done
+    state errored
+    [*] --> idle
+    %% invoke inventory: watchInventory
+    idle --> processing : SUBMIT
+    processing_charging --> retrying : after(30s) [hasRetriesLeft]
+    processing_charging --> errored : after(30s)
+    %% invoke charge: chargeCard
+    processing_charging --> confirming : onDone charge
+    processing_charging --> retrying : onError charge [hasRetriesLeft]
+    processing_charging --> errored : onError charge
+    retrying --> processing_charging : after(RetryDelay)
+    confirming --> done : CONFIRM
+    done --> [*]
+    errored --> [*]

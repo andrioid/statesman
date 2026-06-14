@@ -142,6 +142,11 @@ func (m *Machine[TCtx, TEvt]) Snapshot() Snapshot[TCtx] {
 	return Snapshot[TCtx]{MachineID: m.def.ID, Context: m.initCtx, Status: StatusStarting}
 }
 
+// Definition returns the machine's structural model. It is immutable after
+// construction, so callers (e.g. diagram.Live) may read the tree concurrently
+// with the running actor.
+func (m *Machine[TCtx, TEvt]) Definition() *Definition { return m.def }
+
 // Start launches the actor goroutine at the given root address. Single-shot: a
 // second call returns ErrAlreadyStarted (decision 29).
 func (m *Machine[TCtx, TEvt]) Start(ctx context.Context, address string) error {

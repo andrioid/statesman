@@ -58,6 +58,7 @@ Invoke     := { id?, src (req), onDone?, onError?, meta? }
 | `meta` | `Meta` | **Loaded-but-ignored.** |
 | `states` | `{ key: State }` | Child states. Presence (without `type`) ⇒ compound. |
 | `version` | string | **Root only; loaded-but-ignored.** |
+| `$schema` | string | **Root only; loaded-but-ignored.** The JSON Schema meta-keyword Stately Studio emits so editors can suggest fields and validate; accepted for round-trip even though it is not a `machineSchema.json` property. |
 
 ## 4. Action / Guard / params
 

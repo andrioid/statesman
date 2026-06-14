@@ -1,0 +1,24 @@
+{
+   "$schema": "https://raw.githubusercontent.com/statelyai/schema/refs/heads/main/machineSchema.json",
+   "id": "issues",
+   "initial": "collecting",
+   "states": {
+      "collecting": {
+         "description": "Fetches, parses and packages issue information",
+         "always": { "target": "classifying", "guard": { "type": "isPackageReady" } }
+      },
+      "classifying": {
+         "description": "",
+         "always": { "target": "investigating", "guard": { "type": "isClassified" } }
+      },
+      "investigating": {
+         "description": "Investigating effort from sources like code analysis"
+      },
+      "summarising": {
+         "always": { "target": "syncing" }
+      },
+      "syncing": {
+         "description": "Syncing state with GitHub"
+      }
+   }
+}

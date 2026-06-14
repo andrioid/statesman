@@ -1,0 +1,7 @@
+simple  ◇→ giving
+├─ giving
+│    SPIN (internal)
+│    always [payingTooMuch] → taking
+└─ taking
+     SPIN (internal)
+     always [payingTooLittle] → giving

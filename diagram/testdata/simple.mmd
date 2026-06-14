@@ -1,0 +1,8 @@
+stateDiagram-v2
+    state giving
+    state taking
+    [*] --> giving
+    %% internal SPIN on giving
+    giving --> taking : always [payingTooMuch]
+    %% internal SPIN on taking
+    taking --> giving : always [payingTooLittle]

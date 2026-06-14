@@ -1,0 +1,9 @@
+{
+  "id": "light",
+  "initial": "idle",
+  "states": {
+    "idle": { "on": { "GO": { "target": "running" } } },
+    "running": { "on": { "STOP": { "target": "stopped" } } },
+    "stopped": { "type": "final" }
+  }
+}
