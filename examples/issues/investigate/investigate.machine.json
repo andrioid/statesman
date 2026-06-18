@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/statelyai/schema/refs/heads/main/machineSchema.json",
+  "$schema": "../../../schema/machineSchema.json",
   "description": "Sub-machine: runs code analysis for one issue and leaves findings in its terminal context.",
   "id": "investigate",
   "initial": "analysing",

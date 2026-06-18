@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/statelyai/schema/refs/heads/main/machineSchema.json",
+  "$schema": "../../../schema/machineSchema.json",
   "description": "Sub-machine: edit -> test -> re-edit loop for one issue, bounded by an internal attempt budget.",
   "id": "fix",
   "initial": "editing",

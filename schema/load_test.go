@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -292,5 +293,53 @@ func TestNestedSchemaKeyRejected(t *testing.T) {
 	}`
 	if _, err := Load([]byte(src)); err == nil {
 		t.Fatal("nested $schema should be rejected, got nil error")
+	}
+}
+
+// The vendored Stately machineSchema.json is the surface docs/schema-subset.md
+// pins the loader against. Nothing embeds it, so this is the only guard against
+// corruption/truncation and the place an upstream surface change shows up when
+// the file is re-vendored.
+func TestVendoredSchemaSurface(t *testing.T) {
+	data, err := os.ReadFile("machineSchema.json")
+	if err != nil {
+		t.Fatalf("read vendored schema: %v", err)
+	}
+	var doc struct {
+		Schema               string                     `json:"$schema"`
+		AdditionalProperties *bool                      `json:"additionalProperties"`
+		Properties           map[string]json.RawMessage `json:"properties"`
+		Defs                 map[string]json.RawMessage `json:"$defs"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("vendored schema is not valid JSON: %v", err)
+	}
+	if doc.Schema != "https://json-schema.org/draft/2020-12/schema" {
+		t.Errorf("$schema dialect = %q, want draft 2020-12", doc.Schema)
+	}
+	if doc.AdditionalProperties == nil || *doc.AdditionalProperties {
+		t.Error("root additionalProperties must be false (gate-1 unknown-field rejection)")
+	}
+	// The pinned top-level surface. "$schema" is the JSON Schema meta-keyword; we
+	// permit it at the root (loader and schema agree: root-only) so Studio exports
+	// and our own examples validate under additionalProperties:false. Every other
+	// root key the loader reads must be declared here, and nothing else.
+	wantProps := []string{
+		"$schema", "id", "description", "type", "target", "history", "entry",
+		"exit", "initial", "on", "after", "always", "invoke", "meta", "states",
+		"version",
+	}
+	for _, p := range wantProps {
+		if _, ok := doc.Properties[p]; !ok {
+			t.Errorf("vendored schema missing top-level property %q", p)
+		}
+	}
+	if len(doc.Properties) != len(wantProps) {
+		t.Errorf("vendored schema has %d top-level properties, want %d (surface drift — review)", len(doc.Properties), len(wantProps))
+	}
+	for _, d := range []string{"Action", "Transition", "Guard", "Meta", "Invoke", "State"} {
+		if _, ok := doc.Defs[d]; !ok {
+			t.Errorf("vendored schema missing $def %q", d)
+		}
 	}
 }

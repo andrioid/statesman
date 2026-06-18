@@ -1,6 +1,6 @@
 # statesman: Architecture
 
-A Go statechart runtime, inspired by xstate and anchored on Stately's [`machineSchema.json`](https://github.com/statelyai/schema/blob/main/machineSchema.json), optimized for **long-running backend workflows**, built on Go generics.
+A Go statechart runtime, inspired by xstate and anchored on Stately's [`machineSchema.json`](./schema/machineSchema.json) (vendored from [statelyai/schema](https://github.com/statelyai/schema)), optimized for **long-running backend workflows**, built on Go generics.
 
 > **Status:** v1, implemented. Implementation sequencing and roadmap live in [`TODO.md`](./TODO.md); this document stays focused on design and patterns.
 

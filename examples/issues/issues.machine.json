@@ -1,5 +1,5 @@
 {
-   "$schema": "https://raw.githubusercontent.com/statelyai/schema/refs/heads/main/machineSchema.json",
+   "$schema": "../../schema/machineSchema.json",
    "description": "Automated GitHub issue triaging, investigation and fixing with help of invoked LLM agents from shell.",
    "id": "issues",
    "initial": "collecting",

@@ -1,10 +1,10 @@
 # statesman: Stately schema subset (normative)
 
-What v1 loads from `machine.json`, field by field, against the **actual**
-[`machineSchema.json`](https://github.com/statelyai/schema/blob/main/machineSchema.json)
-(vendored at `internal/schema/testdata/machineSchema.json`). Pins the boundary the
-[transition algorithm](./transition-algorithm.md) assumes (it defers JSON shape
-here) and the loader (`internal/schema`) implements.
+What v1 loads from `machine.json`, field by field, against the **actual** Stately
+[`machineSchema.json`](../schema/machineSchema.json) — vendored at
+`schema/machineSchema.json` (provenance: [statelyai/schema](https://github.com/statelyai/schema)).
+Pins the boundary the [transition algorithm](./transition-algorithm.md) assumes
+(it defers JSON shape here) and the loader (`schema`) implements.
 
 > **Status:** normative (TODO.md Phase 0 gate). Grounded in the schema as fetched
 > 2026-06-13 — a **purely structural** schema (no types, **no `context`**).
@@ -58,7 +58,7 @@ Invoke     := { id?, src (req), onDone?, onError?, meta? }
 | `meta` | `Meta` | **Loaded-but-ignored.** |
 | `states` | `{ key: State }` | Child states. Presence (without `type`) ⇒ compound. |
 | `version` | string | **Root only; loaded-but-ignored.** |
-| `$schema` | string | **Root only; loaded-but-ignored.** The JSON Schema meta-keyword Stately Studio emits so editors can suggest fields and validate; accepted for round-trip even though it is not a `machineSchema.json` property. |
+| `$schema` | string | **Root only; loaded-but-ignored.** The JSON Schema dialect/association meta-keyword Stately Studio (and our examples) emit so editors resolve and validate. Declared at the schema root — root-only, matching the loader — so a `$schema`-carrying document validates cleanly under `additionalProperties: false`. |
 
 ## 4. Action / Guard / params
 

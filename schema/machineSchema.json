@@ -125,6 +125,10 @@
     "states": {
       "$ref": "#/$defs/__schema0"
     },
+    "$schema": {
+      "description": "JSON Schema dialect / association meta-keyword; permitted at the document root so Stately Studio exports (and statesman's own examples) validate. Root-only and ignored by the loader.",
+      "type": "string"
+    },
     "version": {
       "type": "string"
     }

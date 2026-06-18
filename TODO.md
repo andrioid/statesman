@@ -81,7 +81,7 @@ stand up an empty, building module. No runtime behavior yet.
 - [x] **`docs/persistence-contract.md`** — durability window (observer-before-
       publish, abort-on-write-failure), `OutboxIntent` wire format, EventLog
       records, and the at-least-once startup recovery reconciliation (D8, D27, D42).
-- [x] Vendored `schema/testdata/machineSchema.json` + `order.json`
+- [x] Vendored `schema/machineSchema.json` + the `schema/testdata/order.json`
       fixture (validates against the schema, gate 1). Rejection/feature fixtures
       deferred to Phase 1 loader tests.
 
