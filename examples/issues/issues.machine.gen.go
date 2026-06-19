@@ -198,20 +198,24 @@ func makeApplier(impl Implementations) func(int, Context, Event) statesman.Appli
 		case 1:
 			return applyResult(ctx, impl.RecordFailureOnCollectError(ctx, evt.(CollectError)))
 		case 2:
-			return applyResult(ctx, impl.NextAttemptOnCollectingBackingOff(ctx))
+			return applyResult(ctx, impl.RecordFailureOnCollectError(ctx, evt.(CollectError)))
 		case 3:
-			return applyResult(ctx, impl.SaveClassificationOnClassifyDone(ctx, evt.(ClassifyDone)))
+			return applyResult(ctx, impl.NextAttemptOnCollectingBackingOff(ctx))
 		case 4:
 			return applyResult(ctx, impl.SaveClassificationOnClassifyDone(ctx, evt.(ClassifyDone)))
 		case 5:
-			return applyResult(ctx, impl.SaveFindingsOnInvestigateDone(ctx, evt.(InvestigateDone)))
+			return applyResult(ctx, impl.SaveClassificationOnClassifyDone(ctx, evt.(ClassifyDone)))
 		case 6:
-			return applyResult(ctx, impl.SavePatchOnFixDone(ctx, evt.(FixDone)))
+			return applyResult(ctx, impl.SaveFindingsOnInvestigateDone(ctx, evt.(InvestigateDone)))
 		case 7:
-			return applyResult(ctx, impl.SaveSummaryOnSummariseDone(ctx, evt.(SummariseDone)))
+			return applyResult(ctx, impl.SavePatchOnFixDone(ctx, evt.(FixDone)))
 		case 8:
-			return applyResult(ctx, impl.RecordFailureOnSyncError(ctx, evt.(SyncError)))
+			return applyResult(ctx, impl.SaveSummaryOnSummariseDone(ctx, evt.(SummariseDone)))
 		case 9:
+			return applyResult(ctx, impl.RecordFailureOnSyncError(ctx, evt.(SyncError)))
+		case 10:
+			return applyResult(ctx, impl.RecordFailureOnSyncError(ctx, evt.(SyncError)))
+		case 11:
 			return applyResult(ctx, impl.NextAttemptOnSyncingBackingOff(ctx))
 		}
 		return statesman.AppliedEffect[Context]{Kind: statesman.EffectNoop}

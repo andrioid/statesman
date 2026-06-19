@@ -3,11 +3,11 @@ package fix
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
+
+	"github.com/andrioid/statesman/examples/issues/agent"
 )
 
 // EditInput / EditResult are the applyEdit promise adapter's I/O.
@@ -26,30 +26,34 @@ type TestResult struct {
 	Output string
 }
 
-// ApplyEdit execs the fixing agent (shell), passing the findings on stdin, and
-// returns its patch. Set ISSUES_AGENT to your agent CLI; called as
-// `$ISSUES_AGENT fix <number>`.
-func ApplyEdit(ctx context.Context, in EditInput) (EditResult, error) {
-	agent := os.Getenv("ISSUES_AGENT")
-	if agent == "" {
-		return EditResult{}, errors.New("fix: set ISSUES_AGENT to your fixing agent command")
-	}
-	cmd := exec.CommandContext(ctx, agent, "fix", strconv.Itoa(in.Number))
-	cmd.Stdin = strings.NewReader(in.Findings)
-	out, err := cmd.Output()
-	if err != nil {
-		return EditResult{}, fmt.Errorf("fix agent: %w", err)
-	}
-	return EditResult{Patch: strings.TrimSpace(string(out))}, nil
+const fixPrompt = `Propose a unified-diff patch that fixes GitHub issue #{{.Number}}, based on these findings:
+
+{{.Findings}}
+
+Output only the patch text.`
+
+type fixVars struct {
+	Number   int
+	Findings string
 }
 
-// RunTests execs the test command; a zero exit is a pass. Set ISSUES_TEST to your
-// test command (e.g. "go test ./...").
-func RunTests(ctx context.Context, in TestInput) (TestResult, error) {
-	test := os.Getenv("ISSUES_TEST")
-	if test == "" {
-		return TestResult{}, errors.New("fix: set ISSUES_TEST to your test command")
+// ApplyEdit runs the fixing agent and returns its proposed patch. ctx bounds the
+// subprocess so a timeout edge can kill it.
+func ApplyEdit(ctx context.Context, in EditInput) (EditResult, error) {
+	out, err := agent.Invoke(ctx, "fix", fixPrompt, fixVars{in.Number, in.Findings})
+	if err != nil {
+		return EditResult{}, err
 	}
-	out, err := exec.CommandContext(ctx, "sh", "-c", test).CombinedOutput()
+	return EditResult{Patch: out}, nil
+}
+
+// RunTests execs the verification command; a zero exit is a pass. Set VERIFY_CMD
+// to your test/verification command (e.g. "go test ./...").
+func RunTests(ctx context.Context, in TestInput) (TestResult, error) {
+	cmd := os.Getenv("VERIFY_CMD")
+	if cmd == "" {
+		return TestResult{}, errors.New("fix: set VERIFY_CMD to your verification command")
+	}
+	out, err := exec.CommandContext(ctx, "sh", "-c", cmd).CombinedOutput()
 	return TestResult{Passed: err == nil, Output: strings.TrimSpace(string(out))}, nil
 }

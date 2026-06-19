@@ -1,0 +1,34 @@
+# genqlient configuration (https://github.com/Khan/genqlient).
+# Regenerate generated.go with: go generate ./...
+schema: schema.graphql
+operations:
+- operations.graphql
+generated: generated.go
+package: github
+
+# GitHub's custom scalars must be bound to Go types wherever a selection or
+# variable touches them, or generation fails. Timestamps map to time.Time;
+# the rest are opaque strings (IDs, URIs, rendered HTML, git object ids).
+bindings:
+  DateTime:
+    type: time.Time
+  GitTimestamp:
+    type: time.Time
+  PreciseDateTime:
+    type: time.Time
+  Date:
+    type: string
+  URI:
+    type: string
+  HTML:
+    type: string
+  GitObjectID:
+    type: string
+  Base64String:
+    type: string
+  BigInt:
+    type: string
+  GitSSHRemote:
+    type: string
+  X509Certificate:
+    type: string

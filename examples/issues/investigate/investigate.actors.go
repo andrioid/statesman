@@ -2,35 +2,43 @@ package investigate
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"os"
-	"os/exec"
-	"strconv"
-	"strings"
 	"time"
+
+	"github.com/andrioid/statesman/examples/issues/agent"
 )
 
 // AnalyseInput / AnalyseResult are the analyse promise adapter's I/O.
-type AnalyseInput struct{ Number int }
+type AnalyseInput struct {
+	Number int
+	Title  string
+	Body   string
+}
 
 type AnalyseResult struct{ Findings string }
 
-// AnalyseCode execs the code-analysis agent for the issue (the "LLM agent from
-// shell"). It uses CommandContext so the AnalyseTimeout `after` edge — which exits
-// the state and cancels ctx — actually kills the process. Set ISSUES_AGENT to your
-// agent CLI; it is called as `$ISSUES_AGENT analyse <number>` and its stdout is the
-// findings.
+const analysePrompt = `Investigate GitHub issue #{{.Number}} in this repository using read-only tools.
+
+Title: {{.Title}}
+
+Body:
+{{.Body}}
+
+Produce concise root-cause findings (a few sentences). Do not modify any files.`
+
+type analyseVars struct {
+	Number int
+	Title  string
+	Body   string
+}
+
+// AnalyseCode runs the code-analysis agent for the issue (the "LLM agent from
+// shell"). ctx bounds the subprocess so the AnalyseTimeout edge can kill it.
 func AnalyseCode(ctx context.Context, in AnalyseInput) (AnalyseResult, error) {
-	agent := os.Getenv("ISSUES_AGENT")
-	if agent == "" {
-		return AnalyseResult{}, errors.New("investigate: set ISSUES_AGENT to your code-analysis agent command")
-	}
-	out, err := exec.CommandContext(ctx, agent, "analyse", strconv.Itoa(in.Number)).Output()
+	out, err := agent.Invoke(ctx, "analyse", analysePrompt, analyseVars{in.Number, in.Title, in.Body})
 	if err != nil {
-		return AnalyseResult{}, fmt.Errorf("analyse agent: %w", err)
+		return AnalyseResult{}, err
 	}
-	return AnalyseResult{Findings: strings.TrimSpace(string(out))}, nil
+	return AnalyseResult{Findings: out}, nil
 }
 
 // AnalyseTimeout bounds a single analysis run (delays.go convention).

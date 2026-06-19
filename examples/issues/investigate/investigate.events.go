@@ -22,5 +22,7 @@ type Event interface {
 // is the output the parent reads from the terminal Context.
 type ContextFields struct {
 	Number   int
+	Title    string
+	Body     string
 	Findings string
 }

@@ -2,41 +2,45 @@ package issues
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"strconv"
-	"strings"
 
 	"github.com/andrioid/statesman"
+	"github.com/andrioid/statesman/examples/issues/agent"
 	"github.com/andrioid/statesman/examples/issues/fix"
+	"github.com/andrioid/statesman/examples/issues/github"
 	"github.com/andrioid/statesman/examples/issues/investigate"
 )
 
-// --- collect: read the issue from GitHub (gh) ---
+// --- collect: read the issue from GitHub (GraphQL) ---
 
 type CollectInput struct{ Number int }
 
 type CollectResult struct {
-	Title string
-	Body  string
+	Title   string
+	Body    string
+	IssueID string // node id, threaded to sync as the comment subject
+	Owner   string // resolved repo, saved into context for sync
+	Repo    string
 }
 
-// CollectIssue reads the issue via gh. CommandContext honors the CollectAttemptTimeout
-// edge (state exit cancels ctx → process killed).
+// CollectIssue reads the issue via GitHub GraphQL in one round-trip, resolving
+// the target repo from the environment or git remote. The ctx-bound token/repo
+// subprocesses honor the CollectAttemptTimeout edge: a state exit cancels ctx and
+// kills any spawned gh/git process.
 func CollectIssue(ctx context.Context, in CollectInput) (CollectResult, error) {
-	out, err := exec.CommandContext(ctx, "gh", "issue", "view", strconv.Itoa(in.Number),
-		"--json", "title,body", "-t", "{{.title}}\x1f{{.body}}").Output()
+	owner, repo, err := github.Repo(ctx)
 	if err != nil {
-		return CollectResult{}, fmt.Errorf("gh issue view: %w", err)
+		return CollectResult{}, err
 	}
-	parts := strings.SplitN(strings.TrimSpace(string(out)), "\x1f", 2)
-	r := CollectResult{Title: parts[0]}
-	if len(parts) == 2 {
-		r.Body = parts[1]
+	client, err := github.NewClient(ctx)
+	if err != nil {
+		return CollectResult{}, err
 	}
-	return r, nil
+	iss, err := github.GetIssue(ctx, client, owner, repo, in.Number)
+	if err != nil {
+		return CollectResult{}, err
+	}
+	return CollectResult{Title: iss.Title, Body: iss.Body, IssueID: iss.ID, Owner: owner, Repo: repo}, nil
 }
 
 // --- classify: one-shot LLM ---
@@ -49,12 +53,27 @@ type ClassifyInput struct {
 
 type ClassifyResult struct{ Category string } // e.g. "bug", "question", "duplicate"
 
+const classifyPrompt = `You are triaging GitHub issue #{{.Number}}.
+
+Title: {{.Title}}
+
+Body:
+{{.Body}}
+
+Classify it as exactly ONE lowercase word from: bug, question, duplicate, invalid. Reply with only that single word.`
+
+type classifyVars struct {
+	Number int
+	Title  string
+	Body   string
+}
+
 func ClassifyIssue(ctx context.Context, in ClassifyInput) (ClassifyResult, error) {
-	out, err := agent(ctx, in.Title+"\n\n"+in.Body, "classify", strconv.Itoa(in.Number))
+	out, err := agent.Invoke(ctx, "classify", classifyPrompt, classifyVars{in.Number, in.Title, in.Body})
 	if err != nil {
 		return ClassifyResult{}, err
 	}
-	return ClassifyResult{Category: strings.TrimSpace(out)}, nil
+	return ClassifyResult{Category: out}, nil
 }
 
 // --- summarise: one-shot LLM ---
@@ -68,57 +87,66 @@ type SummariseInput struct {
 
 type SummariseResult struct{ Comment string }
 
+const summarisePrompt = `Write a concise maintainer comment (2-4 sentences) for GitHub issue #{{.Number}} summarising the triage outcome.
+
+Category: {{.Category}}
+{{if .Findings}}
+Findings:
+{{.Findings}}
+{{end}}{{if .Patch}}
+Proposed patch:
+{{.Patch}}
+{{end}}
+Reply with only the comment text.`
+
+type summariseVars struct {
+	Number   int
+	Category string
+	Findings string
+	Patch    string
+}
+
 func SummariseIssue(ctx context.Context, in SummariseInput) (SummariseResult, error) {
-	out, err := agent(ctx, in.Findings+"\n\n"+in.Patch, "summarise", strconv.Itoa(in.Number))
+	out, err := agent.Invoke(ctx, "summarise", summarisePrompt, summariseVars{in.Number, in.Category, in.Findings, in.Patch})
 	if err != nil {
 		return SummariseResult{}, err
 	}
-	return SummariseResult{Comment: strings.TrimSpace(out)}, nil
+	return SummariseResult{Comment: out}, nil
 }
 
-// --- sync: write back to GitHub (gh), idempotently ---
+// --- sync: write back to GitHub (GraphQL), idempotently ---
 
 type SyncInput struct {
 	Number  int
+	Owner   string
+	Repo    string
+	IssueID string
 	Comment string
 }
 
 type SyncResult struct{ Posted bool }
 
-// SyncIssue posts the summary as a comment. Retries are at-least-once, so a
-// timed-out post may have landed: the body carries a per-issue marker and a prior
-// comment with that marker short-circuits the write. Idempotency lives here, in the
-// adapter — not in the chart.
+// SyncIssue posts the summary as a comment via GraphQL. Retries are at-least-once,
+// so a timed-out post may have landed: the body carries a per-issue marker and a
+// prior comment with that marker short-circuits the write. Idempotency lives here,
+// in the adapter — not in the chart.
 func SyncIssue(ctx context.Context, in SyncInput) (SyncResult, error) {
-	marker := fmt.Sprintf("<!-- issues-bot:%d -->", in.Number)
-	existing, err := exec.CommandContext(ctx, "gh", "issue", "view", strconv.Itoa(in.Number), "--comments").Output()
+	client, err := github.NewClient(ctx)
 	if err != nil {
-		return SyncResult{}, fmt.Errorf("gh issue view --comments: %w", err)
+		return SyncResult{}, err
 	}
-	if strings.Contains(string(existing), marker) {
+	marker := fmt.Sprintf("<!-- issues-bot:%d -->", in.Number)
+	exists, err := github.CommentExists(ctx, client, in.Owner, in.Repo, in.Number, marker)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	if exists {
 		return SyncResult{Posted: false}, nil // already synced on a prior attempt
 	}
-	if err := exec.CommandContext(ctx, "gh", "issue", "comment", strconv.Itoa(in.Number),
-		"--body", marker+"\n"+in.Comment).Run(); err != nil {
-		return SyncResult{}, fmt.Errorf("gh issue comment: %w", err)
+	if err := github.PostComment(ctx, client, in.IssueID, marker+"\n"+in.Comment); err != nil {
+		return SyncResult{}, err
 	}
 	return SyncResult{Posted: true}, nil
-}
-
-// agent execs the configured LLM agent CLI (the "agent from shell"), feeding the
-// payload on stdin and returning stdout.
-func agent(ctx context.Context, stdin string, args ...string) (string, error) {
-	cmd := os.Getenv("ISSUES_AGENT")
-	if cmd == "" {
-		return "", errors.New("issues: set ISSUES_AGENT to your LLM agent command")
-	}
-	c := exec.CommandContext(ctx, cmd, args...)
-	c.Stdin = strings.NewReader(stdin)
-	out, err := c.Output()
-	if err != nil {
-		return "", fmt.Errorf("%s %s: %w", cmd, strings.Join(args, " "), err)
-	}
-	return string(out), nil
 }
 
 // --- sub-machine factories (fromMachine src) ---

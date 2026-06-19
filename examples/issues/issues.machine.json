@@ -17,7 +17,7 @@
                      "onDone": { "target": "#classifying", "actions": [{ "type": "savePackage" }] },
                      "onError": [
                         { "guard": { "type": "shouldRetry" }, "target": "backingOff", "actions": [{ "type": "recordFailure" }] },
-                        { "target": "#failed" }
+                        { "target": "#failed", "actions": [{ "type": "recordFailure" }] }
                      ]
                   }
                ],
@@ -96,7 +96,7 @@
                      "onDone": { "target": "#finished" },
                      "onError": [
                         { "guard": { "type": "shouldRetry" }, "target": "backingOff", "actions": [{ "type": "recordFailure" }] },
-                        { "target": "#failed" }
+                        { "target": "#failed", "actions": [{ "type": "recordFailure" }] }
                      ]
                   }
                ],

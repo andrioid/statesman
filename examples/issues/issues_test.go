@@ -2,6 +2,7 @@ package issues
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/andrioid/statesman"
@@ -135,5 +136,27 @@ func TestCoordinatorCollectRetry(t *testing.T) {
 	}
 	if snap.InvokeRestarts["collect"] != 1 {
 		t.Fatalf("collect restarts = %d, want 1", snap.InvokeRestarts["collect"])
+	}
+}
+
+// A non-transient collect failure does not retry: the error edge routes straight
+// to the terminal `failed` state, and that edge records the cause so an operator
+// (or the issuesctl dry-run) can see why the run failed.
+func TestCoordinatorCollectFailRecordsError(t *testing.T) {
+	ctx := context.Background()
+	s := newSync(t)
+	s.M.SetInitialContext(Context{ContextFields: ContextFields{Number: 13}})
+	s.M.RegisterInvoke("collect", statesmantest.FakeActor[Context, Event](
+		CollectError{Err: errors.New("could not resolve to an Issue with the number of 13")}))
+
+	if err := s.Start(ctx, "issue-13"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	snap := s.Snapshot()
+	if snap.Status != statesman.StatusDone || !active(snap, States.Failed) {
+		t.Fatalf("final = %v/%v, want failed/Done", snap.ActiveStates, snap.Status)
+	}
+	if snap.Context.LastError == "" {
+		t.Fatal("terminal collect failure must record LastError")
 	}
 }

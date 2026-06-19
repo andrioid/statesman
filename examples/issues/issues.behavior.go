@@ -29,13 +29,13 @@ func (Impl) SummariseIssueInput(ctx Context) SummariseInput {
 }
 
 func (Impl) SyncIssueInput(ctx Context) SyncInput {
-	return SyncInput{Number: ctx.Number, Comment: ctx.Summary}
+	return SyncInput{Number: ctx.Number, Owner: ctx.Owner, Repo: ctx.Repo, IssueID: ctx.IssueID, Comment: ctx.Summary}
 }
 
 // InvestigateInput / FixInput seed each sub-machine's initial context from the
 // coordinator — the machine analogue of a promise input mapper.
 func (Impl) InvestigateInput(ctx Context) investigate.Context {
-	return investigate.Context{ContextFields: investigate.ContextFields{Number: ctx.Number}}
+	return investigate.Context{ContextFields: investigate.ContextFields{Number: ctx.Number, Title: ctx.Title, Body: ctx.Body}}
 }
 
 func (Impl) FixInput(ctx Context) fix.Context {
@@ -48,7 +48,8 @@ func (Impl) FixInput(ctx Context) fix.Context {
 
 func (Impl) SavePackageOnCollectDone(ctx Context, evt CollectDone) ActionResult {
 	f := ctx.ContextFields
-	f.Title, f.Body = evt.Output.Title, evt.Output.Body
+	f.Title, f.Body, f.IssueID = evt.Output.Title, evt.Output.Body, evt.Output.IssueID
+	f.Owner, f.Repo = evt.Output.Owner, evt.Output.Repo
 	return Assign{Fields: f}
 }
 

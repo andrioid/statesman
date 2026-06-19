@@ -5,7 +5,7 @@ type Impl struct{}
 
 // AnalyseCodeInput maps the parent-seeded context to the analyse agent's input.
 func (Impl) AnalyseCodeInput(ctx Context) AnalyseInput {
-	return AnalyseInput{Number: ctx.Number}
+	return AnalyseInput{Number: ctx.Number, Title: ctx.Title, Body: ctx.Body}
 }
 
 // SaveFindingsOnAnalyseDone records the agent's findings into the terminal

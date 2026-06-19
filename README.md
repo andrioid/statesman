@@ -108,6 +108,7 @@ states, status, and armed timers onto that tree.
 | `internal/codegen` | `go/types`-driven resolution + emitters (not a public API)                                                                                               |
 | `docs/`            | Normative specs: transition algorithm, schema subset, persistence contract                                                                               |
 | `examples/simple`  | Worked slot-machine example (RTP-controlled via giving/taking mode states): machine + `cmd/simple` terminal demo (`go run ./examples/simple/cmd/simple`) |
+| `examples/issues`  | Worked GitHub issue-triage coordinator. Its own nested module so the genqlient GraphQL client (`github/`) keeps its deps out of the core; `gh` only as a token fallback. LLM steps run through `AGENT='pi -p {{prompt}}'` (per-verb `AGENT_<VERB>` overrides; prompts are templates overridable via `AGENT_PROMPT_DIR`). `cmd/issuesctl <n>` drives the whole machine against a live issue in dry-run to iterate on prompts. Test with `cd examples/issues && go test ./...` |
 
 ## Testing
 

@@ -1,0 +1,123 @@
+# GraphQL operations for the issue-triage bot. genqlient turns each of these
+# into a type-safe Go function in generated.go (package github).
+# Regenerate with: go generate ./...
+
+# --- issues: read ---
+
+# IssueByNumber fetches everything the pipeline needs in one round-trip:
+# the node id (required as a mutation subjectId / id), title, body, url and state.
+query IssueByNumber($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      id
+      number
+      title
+      body
+      url
+      state
+    }
+  }
+}
+
+# IssueComments pages an issue's comments so the sync adapter can scan for its
+# idempotency marker before posting. Pass a nil $after for the first page, then
+# pageInfo.endCursor while pageInfo.hasNextPage.
+query IssueComments(
+  $owner: String!,
+  $repo: String!,
+  $number: Int!,
+  # @genqlient(pointer: true, omitempty: true)
+  $after: String,
+) {
+  repository(owner: $owner, name: $repo) {
+    issue(number: $number) {
+      comments(first: 100, after: $after) {
+        nodes {
+          body
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+}
+
+# --- issues: write ---
+
+# AddIssueComment posts a comment on an issue (subjectId is the issue node id).
+mutation AddIssueComment($subjectId: ID!, $body: String!) {
+  addComment(input: {subjectId: $subjectId, body: $body}) {
+    commentEdge {
+      node {
+        id
+        url
+      }
+    }
+  }
+}
+
+# UpdateIssue edits an issue's title/body/state. The optional inputs are
+# pointers with omitempty so a nil leaves that field untouched server-side; a
+# non-nil value (including "") is sent and applied.
+mutation UpdateIssue(
+  $id: ID!,
+  # @genqlient(pointer: true, omitempty: true)
+  $title: String,
+  # @genqlient(pointer: true, omitempty: true)
+  $body: String,
+  # @genqlient(pointer: true, omitempty: true)
+  $state: IssueState,
+) {
+  updateIssue(input: {id: $id, title: $title, body: $body, state: $state}) {
+    issue {
+      number
+      title
+      state
+      url
+    }
+  }
+}
+
+# --- projects (v2): type-safe helpers ---
+
+# ProjectSingleSelectField resolves a project's node id plus a single-select
+# field's id and its option ids, which SetProjectFieldValue requires.
+query ProjectSingleSelectField($org: String!, $number: Int!, $field: String!) {
+  organization(login: $org) {
+    projectV2(number: $number) {
+      id
+      field(name: $field) {
+        ... on ProjectV2SingleSelectField {
+          id
+          options {
+            id
+            name
+          }
+        }
+      }
+    }
+  }
+}
+
+# AddProjectItem adds an issue or pull request (by node id) to a project.
+mutation AddProjectItem($projectId: ID!, $contentId: ID!) {
+  addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+    item {
+      id
+    }
+  }
+}
+
+# SetProjectFieldValue sets one field on a project item. Populate exactly one
+# member of $value (text, number, date, singleSelectOptionId or iterationId).
+mutation SetProjectFieldValue($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
+  updateProjectV2ItemFieldValue(
+    input: {projectId: $projectId, itemId: $itemId, fieldId: $fieldId, value: $value}
+  ) {
+    projectV2Item {
+      id
+    }
+  }
+}
